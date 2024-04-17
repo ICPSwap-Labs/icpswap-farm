@@ -88,7 +88,11 @@ shared (initMsg) actor class FarmController(
             };
             let rewardPoolMetadata = switch (await rewardPoolAct.metadata()) {
                 case (#ok(poolMetadata)) {
-                    if (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address)) {
+                    if (
+                        (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address))
+                        or
+                        (Text.notEqual(ICP.address, poolMetadata.token0.address) and Text.notEqual(ICP.address, poolMetadata.token1.address))
+                    ) {
                         throw Error.reject("Illegal SwapPool of reward token");
                     };
                 };
