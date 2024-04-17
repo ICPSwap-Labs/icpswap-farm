@@ -265,7 +265,7 @@ function create_farm()
     one_day_seconds=$((60 * 60 * 24))
     one_day_later_timestamp=$((current_timestamp + one_day_seconds))
 
-    result=`dfx canister call FarmController create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $one_day_later_timestamp; secondPerCycle = 3600; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
+    result=`dfx canister call FarmController create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $one_day_later_timestamp; secondPerCycle = 60; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
     echo "create_farm result: $result"
 
     if [[ $result =~ ok\ =\ \"([^\"]+)\" ]]; then
@@ -284,6 +284,21 @@ function stake() # positionId
 
     result=`dfx canister call $farmId stake "($1:nat)"`
     echo "stake result: $result"
+}
+
+function check_distribution() # positionId
+{
+    result=`dfx canister call $farmId getStakeRecord "(0:nat, 100:nat, \"\")"`
+    echo "stake record: $result"
+    
+    result=`dfx canister call $farmId getDistributeRecord "(0:nat, 100:nat, \"\")"`
+    echo "distribute record: $result"
+
+    result=`dfx canister call $farmId getDeposit "($1:nat)"`
+    echo "deposit info: $result"
+
+    result=`dfx canister call $farmId getTVL`
+    echo "TVL: $result"
 }
 
 function test()
@@ -305,46 +320,60 @@ function test()
     #tickLower tickUpper amount0Desired amount0Min amount1Desired amount1Min ### liquidity tickCurrent sqrtRatioX96
     mint -23040 46080 100000000000 92884678893 1667302813453 1573153132015 529634421680 24850 274450166607934908532224538203
 
+    echo "==> stake"
+    stake 1
+
     sleep 120
 
     echo "==> stake"
     stake 1
 
-    # echo "==> swap"
-    # #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    # swap $token0 100000000000 100000000000 658322113914 529634421680 14808 166123716848874888729218662825 999999800000000000 999999056851511853
+    echo "==> swap"
+    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    swap $token0 100000000000 100000000000 658322113914 529634421680 14808 166123716848874888729218662825 999999800000000000 999999056851511853
 
-    # echo "==> swap"
-    # #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    # swap $token1 200300000000 200300000000 34999517311 529634421680 18116 195996761539654227777570705349 999999838499469043 999998856551511853
+    echo "==> swap"
+    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    swap $token1 200300000000 200300000000 34999517311 529634421680 18116 195996761539654227777570705349 999999838499469043 999998856551511853
 
-    # echo "==> mint"
-    # depost $token0 2340200000000
-    # depost $token1 12026457043801
-    # #tickLower tickUpper amount0Desired amount0Min amount1Desired amount1Min ### liquidity tickCurrent sqrtRatioX96
-    # mint -16080 92220 2340200000000 2228546458622 12026457043801 11272984126445 6464892363717 18116 195996761539654227777570705349
+    sleep 120
 
-    # echo "==> swap"
-    # #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    # swap $token1 900934100000000 900934100000000 2274000482681 0 887271 1461446703485210103287273052203988822378723970341 999999999699999993 999398897657090959
+    check_distribution 1
 
-    # echo "==> swap"
-    # #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    # swap $token0 10000000000 10000000000 78411589305243 5935257942037 89098 6815937996742481301561907102830 999999989699999993 999485150405326727
+    echo "==> mint"
+    depost $token0 2340200000000
+    depost $token1 12026457043801
+    #tickLower tickUpper amount0Desired amount0Min amount1Desired amount1Min ### liquidity tickCurrent sqrtRatioX96
+    mint -16080 92220 2340200000000 2228546458622 12026457043801 11272984126445 6464892363717 18116 195996761539654227777570705349
 
-    # echo "==> mint"
-    # depost $token0 109232300000000
-    # depost $token1 988000352041693230
-    # #tickLower tickUpper amount0Desired amount0Min amount1Desired amount1Min ### liquidity tickCurrent sqrtRatioX96
-    # mint 45000 115140 109232300000000 102249810937012 988000352041693230 931015571568576453 12913790762040195 89098 6815937996742481301561907102830
+    echo "==> stake"
+    stake 2
 
-    # echo "==> swap"
-    # #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    # swap $token0 20000000000 20000000000 134142648626931 12913790762040195 89095 6815032711583577861813878240260 999890737399999993 11632355277123122
+    echo "==> swap"
+    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    swap $token1 900934100000000 900934100000000 2274000482681 0 887271 1461446703485210103287273052203988822378723970341 999999999699999993 999398897657090959
 
-    # echo "==> swap"
-    # #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    # swap $token0 200203100000000 200203100000000 576342038450924726 12913790762040195 72181 2925487520681317622364346051650 999690534299999993 645608597573140321
+    echo "==> swap"
+    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    swap $token0 10000000000 10000000000 78411589305243 5935257942037 89098 6815937996742481301561907102830 999999989699999993 999485150405326727
+
+    sleep 120
+
+    check_distribution 2
+
+    echo "==> mint"
+    depost $token0 109232300000000
+    depost $token1 988000352041693230
+    #tickLower tickUpper amount0Desired amount0Min amount1Desired amount1Min ### liquidity tickCurrent sqrtRatioX96
+    mint 45000 115140 109232300000000 102249810937012 988000352041693230 931015571568576453 12913790762040195 89098 6815937996742481301561907102830
+
+    echo "==> swap"
+    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    swap $token0 20000000000 20000000000 134142648626931 12913790762040195 89095 6815032711583577861813878240260 999890737399999993 11632355277123122
+
+    echo "==> swap"
+    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    swap $token0 200203100000000 200203100000000 576342038450924726 12913790762040195 72181 2925487520681317622364346051650 999690534299999993 645608597573140321
 
 };
 
