@@ -50,6 +50,8 @@ shared (initMsg) actor class Farm(
   // position pool metadata
   private stable var _poolToken0 = { address = ""; standard = "" };
   private stable var _poolToken1 = { address = ""; standard = "" };
+  private stable var _poolToken0Fee = 0;
+  private stable var _poolToken1Fee = 0;
   private stable var _poolToken0Amount = 0;
   private stable var _poolToken1Amount = 0;
   private stable var _poolToken0Decimals : Nat = 0;
@@ -98,6 +100,7 @@ shared (initMsg) actor class Farm(
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
     getUserPosition : query (positionId : Nat) -> async Result.Result<Types.UserPositionInfo, Types.Error>;
     transferPosition : shared (from : Principal, to : Principal, positionId : Nat) -> async Result.Result<Bool, Types.Error>;
+    refreshIncome : query (positionId : Nat) -> async Result.Result<{ tokensOwed0 : Nat; tokensOwed1 : Nat }, Types.Error>;
   };
   private stable var _rewardPoolAct = actor (Principal.toText(initArgs.rewardPool)) : actor {
     quote : query (args : Types.SwapArgs) -> async Result.Result<Nat, Types.Error>;
@@ -167,6 +170,8 @@ shared (initMsg) actor class Farm(
     let poolToken1Adapter = TokenFactory.getAdapter(_poolToken1.address, _poolToken1.standard);
     _poolToken0Decimals := Nat8.toNat(await poolToken0Adapter.decimals());
     _poolToken1Decimals := Nat8.toNat(await poolToken1Adapter.decimals());
+    _poolToken0Fee := await poolToken0Adapter.fee();
+    _poolToken1Fee := await poolToken1Adapter.fee();
     _rewardPoolMetadata := {
       sqrtPriceX96 = rewardPoolMetadata.sqrtPriceX96;
       tick = rewardPoolMetadata.tick;
@@ -204,13 +209,22 @@ shared (initMsg) actor class Farm(
       };
       case (_) {};
     };
+    var incomeInfo = switch (await _swapPoolAct.refreshIncome(positionId)) {
+      case (#ok(result)) {
+        if (result.tokensOwed0 > (_poolToken0Fee * 10) or result.tokensOwed1 > (_poolToken1Fee * 10)) {
+          return #err(#InternalError("Please claim the income of position and try again"));
+        };
+      };
+      case (#err(code)) {
+        return #err(#InternalError("Get user position " # debug_show (positionId) # " income data failed: " # debug_show (code)));
+      };
+    };
     var positionInfo = switch (await _swapPoolAct.getUserPosition(positionId)) {
       case (#ok(result)) { result };
       case (#err(code)) {
         return #err(#InternalError("Get user position " # debug_show (positionId) # " failed: " # debug_show (code)));
       };
     };
-    // todo check income
     if (_positionIds.size() >= _positionNumLimit) {
       return #err(#InternalError("The number of staked positions reaches the upper limit"));
     };
