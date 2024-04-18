@@ -262,10 +262,13 @@ function create_farm()
     one_minutes_seconds=$((60 * 1))
     one_minutes_later_timestamp=$((current_timestamp + one_minutes_seconds))
 
+    ten_minutes_seconds=$((60 * 10))
+    ten_minutes_later_timestamp=$((current_timestamp + ten_minutes_seconds))
+
     one_day_seconds=$((60 * 60 * 24))
     one_day_later_timestamp=$((current_timestamp + one_day_seconds))
 
-    result=`dfx canister call FarmController create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $one_day_later_timestamp; secondPerCycle = 60; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
+    result=`dfx canister call FarmController create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
     echo "create_farm result: $result"
 
     if [[ $result =~ ok\ =\ \"([^\"]+)\" ]]; then
@@ -288,14 +291,14 @@ function stake() # positionId
 
 function check_distribution() # positionId
 {
-    result=`dfx canister call $farmId getStakeRecord "(0:nat, 100:nat, \"\")"`
-    echo "stake record: $result"
+    # result=`dfx canister call $farmId getStakeRecord "(0:nat, 100:nat, \"\")"`
+    # echo "stake record: $result"
     
-    result=`dfx canister call $farmId getDistributeRecord "(0:nat, 100:nat, \"\")"`
-    echo "distribute record: $result"
+    # result=`dfx canister call $farmId getDistributeRecord "(0:nat, 100:nat, \"\")"`
+    # echo "distribute record: $result"
 
-    result=`dfx canister call $farmId getDeposit "($1:nat)"`
-    echo "deposit info: $result"
+    # result=`dfx canister call $farmId getDeposit "($1:nat)"`
+    # echo "deposit info: $result"
 
     result=`dfx canister call $farmId getTVL`
     echo "TVL: $result"
@@ -375,6 +378,7 @@ function test()
     #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
     swap $token0 200203100000000 200203100000000 576342038450924726 12913790762040195 72181 2925487520681317622364346051650 999690534299999993 645608597573140321
 
+    sleep 300
 };
 
 test

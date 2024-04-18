@@ -89,8 +89,7 @@ shared (initMsg) actor class FarmController(
             let rewardPoolMetadata = switch (await rewardPoolAct.metadata()) {
                 case (#ok(poolMetadata)) {
                     if (
-                        (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address))
-                        or
+                        (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address)) or
                         (Text.notEqual(ICP.address, poolMetadata.token0.address) and Text.notEqual(ICP.address, poolMetadata.token1.address))
                     ) {
                         throw Error.reject("Illegal SwapPool of reward token");
@@ -124,41 +123,26 @@ shared (initMsg) actor class FarmController(
     };
 
     public shared (msg) func updateFarmInfo(previousStatus : Text, status : Text, tvl : Types.TVL) : async () {
-        var _previousMap : HashMap.HashMap<Principal, Types.TVL> = HashMap.fromIter([].vals(), 10, Principal.equal, Principal.hash);
-        if (Text.equal(previousStatus, Types.NOT_STARTED)) {
-            _previousMap := _farmDataService.getNotStartedFarms();
-        } else if (Text.equal(previousStatus, Types.LIVE)) {
-            _previousMap := _farmDataService.getLiveFarmFarms();
-        } else if (Text.equal(previousStatus, Types.FINISHED)) {
-            _previousMap := _farmDataService.getFinishedFarms();
-        } else if (Text.equal(previousStatus, Types.CLOSED)) {
-            _previousMap := _farmDataService.getClosedFarms();
-        } else {
-            return;
+        if (Text.equal(status, Types.NOT_STARTED)) {
+            _farmDataService.putNotStartedFarm(msg.caller, tvl);
+        } else if (Text.equal(status, Types.LIVE)) {
+            _farmDataService.putLiveFarmFarm(msg.caller, tvl);
+        } else if (Text.equal(status, Types.FINISHED)) {
+            _farmDataService.putFinishedFarm(msg.caller, tvl);
+        } else if (Text.equal(status, Types.CLOSED)) {
+            _farmDataService.putClosedFarm(msg.caller, tvl);
         };
 
-        if (Text.equal(previousStatus, status)) {
-            // check if the caller is a Farm canister and existing
-            switch (_previousMap.get(msg.caller)) {
-                case (?f) { _previousMap.put(msg.caller, tvl) };
-                case (_) {};
-            };
-        } else {
-            // check if the caller is a Farm canister and existing
-            switch (_previousMap.remove(msg.caller)) {
-                case (?f) {
-                    if (Text.equal(status, Types.NOT_STARTED)) {
-                        _farmDataService.putNotStartedFarm(msg.caller, tvl);
-                    } else if (Text.equal(status, Types.LIVE)) {
-                        _farmDataService.putLiveFarmFarm(msg.caller, tvl);
-                    } else if (Text.equal(status, Types.FINISHED)) {
-                        _farmDataService.putFinishedFarm(msg.caller, tvl);
-                    } else if (Text.equal(status, Types.CLOSED)) {
-                        _farmDataService.putClosedFarm(msg.caller, tvl);
-                    };
-                };
-                case (_) {};
-            };
+        if (Text.equal(previousStatus, status)) return;
+
+        if (Text.equal(previousStatus, Types.NOT_STARTED)) {
+            ignore _farmDataService.removeNotStartedFarm(msg.caller);
+        } else if (Text.equal(previousStatus, Types.LIVE)) {
+            ignore _farmDataService.removeLiveFarm(msg.caller);
+        } else if (Text.equal(previousStatus, Types.FINISHED)) {
+            ignore _farmDataService.removeFinishedFarm(msg.caller);
+        } else if (Text.equal(previousStatus, Types.CLOSED)) {
+            ignore _farmDataService.removeClosedFarm(msg.caller);
         };
     };
 
@@ -171,6 +155,15 @@ shared (initMsg) actor class FarmController(
 
     public query func getFarms(status : Text) : async Result.Result<[(Principal, Types.TVL)], Text> {
         return #ok(_farmDataService.getTargetArray(status));
+    };
+
+    public query func getAllFarms() : async Result.Result<{ NOT_STARTED : [(Principal, Types.TVL)]; LIVE : [(Principal, Types.TVL)]; FINISHED : [(Principal, Types.TVL)]; CLOSED : [(Principal, Types.TVL)] }, Text> {
+        return #ok({
+            NOT_STARTED = _farmDataService.getTargetArray(Types.NOT_STARTED);
+            LIVE = _farmDataService.getTargetArray(Types.LIVE);
+            FINISHED = _farmDataService.getTargetArray(Types.FINISHED);
+            CLOSED = _farmDataService.getTargetArray(Types.CLOSED);
+        });
     };
 
     public query func getInitArgs() : async Result.Result<{ ICP : Types.Token; governanceCid : ?Principal }, Types.Error> {

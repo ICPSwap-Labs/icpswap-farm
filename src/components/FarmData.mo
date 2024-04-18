@@ -59,7 +59,7 @@ module FarmInfoService {
                 case (null) { false };
             };
         };
-        public func removeLiveFarmFarm(farmCid : Principal) : Bool {
+        public func removeLiveFarm(farmCid : Principal) : Bool {
             switch (_liveFarmMap.remove(farmCid)) {
                 case (?tvl) { true };
                 case (null) { false };
@@ -94,7 +94,7 @@ module FarmInfoService {
         };
         public func getFinishedFarmBuffer() : Buffer.Buffer<(Principal, Types.TVL)> {
             var buffer = Buffer.Buffer<(Principal, Types.TVL)>(0);
-            for (tvl in Iter.toArray(_notStartedFarmMap.entries()).vals()) {
+            for (tvl in Iter.toArray(_finishedFarmMap.entries()).vals()) {
                 buffer.add(tvl);
             };
             return buffer;

@@ -33,7 +33,7 @@ shared (initMsg) actor class Farm(
   private stable var _ICPDecimals : Nat = 0;
 
   // reward meta
-  private stable var _status = "";
+  private stable var _status = Types.NOT_STARTED;
   private stable var _rewardPerCycle : Nat = 0;
   private stable var _currentCycleCount : Nat = 0;
   private stable var _totalCycleCount : Nat = 0;
@@ -775,16 +775,14 @@ shared (initMsg) actor class Farm(
     if (_status == Types.FINISHED and (_totalRewardBalance == 0 and _positionIds.size() == 0)) {
       _status := Types.CLOSED;
     };
-    if (not Text.equal(_status, previousStatus)) {
-      await _farmControllerAct.updateFarmInfo(
-        previousStatus,
-        _status,
-        {
-          stakedTokenTVL = _TVL.stakedTokenTVL;
-          rewardTokenTVL = _TVL.rewardTokenTVL;
-        },
-      );
-    };
+    await _farmControllerAct.updateFarmInfo(
+      previousStatus,
+      _status,
+      {
+        stakedTokenTVL = _TVL.stakedTokenTVL;
+        rewardTokenTVL = _TVL.rewardTokenTVL;
+      },
+    );
   };
 
   private func _syncPoolMeta() : async () {

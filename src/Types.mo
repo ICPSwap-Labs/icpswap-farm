@@ -177,6 +177,7 @@ module {
         #updateFarmInfo : () -> (Text, Text, TVL);
         #getCycleInfo : () -> ();
         #getFarms : () -> Text;
+        #getAllFarms : () -> ();
         #getInitArgs : () -> ();
         #getGlobalTVL : () -> ();
         #setAdmins : () -> [Principal];
