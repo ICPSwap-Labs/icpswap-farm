@@ -414,6 +414,15 @@ shared (initMsg) actor class Farm(
       try {
         switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.refunder; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null })) {
           case (#Ok(index)) {
+            // notify farm controller to update TVL and status
+            await _farmControllerAct.updateFarmInfo(
+              previousStatus,
+              Types.CLOSED,
+              {
+                stakedTokenTVL = 0;
+                rewardTokenTVL = 0;
+              },
+            );
             _stakeRecordBuffer.add({
               timestamp = nowTime;
               transType = #claim;
@@ -427,7 +436,6 @@ shared (initMsg) actor class Farm(
             _status := Types.CLOSED;
             _TVL.stakedTokenTVL := 0;
             _TVL.rewardTokenTVL := 0;
-            return #ok("Refund successfully");
           };
           case (#Err(code)) {
             _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ".");
@@ -436,19 +444,23 @@ shared (initMsg) actor class Farm(
       } catch (e) {
         _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # ".");
       };
+    } else {
+      // notify farm controller to update TVL and status
+      await _farmControllerAct.updateFarmInfo(
+        previousStatus,
+        Types.CLOSED,
+        {
+          stakedTokenTVL = 0;
+          rewardTokenTVL = 0;
+        },
+      );
+      _totalRewardBalance := 0;
+      _status := Types.CLOSED;
+      _TVL.stakedTokenTVL := 0;
+      _TVL.rewardTokenTVL := 0;
     };
 
-    // notify farm controller to update TVL and status
-    await _farmControllerAct.updateFarmInfo(
-      previousStatus,
-      _status,
-      {
-        stakedTokenTVL = 0;
-        rewardTokenTVL = 0;
-      },
-    );
-
-    return #err(#InternalError("Refund failed: Farm has already initialized"));
+    return #ok("Close successfully");
   };
 
   public shared (msg) func setLimitInfo(token0Limit : Nat, token1Limit : Nat, positionNumLimit : Nat, priceInsideLimit : Bool) : async () {
