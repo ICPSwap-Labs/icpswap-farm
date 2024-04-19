@@ -269,7 +269,7 @@ function create_farm()
     one_day_later_timestamp=$((current_timestamp + one_day_seconds))
 
     result=`dfx canister call FarmController create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
-    echo "create_farm result: $result"
+    echo "\033[32m create farm result: $result \033[0m"
 
     if [[ $result =~ ok\ =\ \"([^\"]+)\" ]]; then
         farmId="${BASH_REMATCH[1]}"
@@ -280,13 +280,37 @@ function create_farm()
     echo "transfer to farm result: $result"
 }
 
+function close_farm()
+{
+    result=`dfx canister call $farmId close`
+    echo "\033[32m close result: $result \033[0m"
+}
+
 function stake() # positionId
 {
     result=`dfx canister call $poolId_1 approvePosition "(principal \"$farmId\", $1:nat)"`
     echo "approvePosition result: $result"
 
     result=`dfx canister call $farmId stake "($1:nat)"`
-    echo "stake result: $result"
+    echo "\033[32m stake result: $result \033[0m"
+}
+
+function unstake() # positionId
+{
+    result=`dfx canister call $farmId getRewardMeta`
+    echo "RewardMeta: $result"    
+
+    rewardTokenBalance="$(balanceOf $token1 $MINTER_PRINCIPAL null)"
+    echo "$MINTER_PRINCIPAL reward token balance: $rewardTokenBalance"
+
+    result=`dfx canister call $farmId unstake "($1:nat)"`
+    echo "\033[32m unstake result: $result \033[0m"
+
+    result=`dfx canister call $farmId getRewardMeta`
+    echo "RewardMeta: $result"  
+
+    rewardTokenBalance="$(balanceOf $token1 $MINTER_PRINCIPAL null)"
+    echo "$MINTER_PRINCIPAL reward token balance: $rewardTokenBalance"
 }
 
 function check_distribution() # positionId
@@ -341,8 +365,6 @@ function test()
 
     sleep 120
 
-    check_distribution 1
-
     echo "==> mint"
     depost $token0 2340200000000
     depost $token1 12026457043801
@@ -362,7 +384,7 @@ function test()
 
     sleep 120
 
-    check_distribution 2
+    unstake 1
 
     echo "==> mint"
     depost $token0 109232300000000
@@ -378,7 +400,11 @@ function test()
     #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
     swap $token0 200203100000000 200203100000000 576342038450924726 12913790762040195 72181 2925487520681317622364346051650 999690534299999993 645608597573140321
 
-    sleep 300
+    unstake 2
+
+    sleep 400
+
+    close_farm
 };
 
 test
