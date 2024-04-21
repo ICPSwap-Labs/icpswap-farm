@@ -185,33 +185,34 @@ module {
         #getVersion : () -> ();
     };
     public type FarmMsg = {
-        #init : () -> InitFarmArgs;
-        #stake : () -> (Nat);
-        #unstake : () -> (Nat);
-        #finishManually : () -> ();
+                #clearErrorLog : () -> ();
         #close : () -> ();
-        #clearErrorLog : () -> ();
-        #setAdmins : () -> ([Principal]);
-        #setLimitInfo : () -> (Nat, Nat, Nat, Bool);
-        #getRewardInfo : () -> ([Nat]);
-        #getFarmInfo : () -> (Text);
-        #getUserPositions : () -> (Principal, Nat, Nat);
-        #getUserTVL : () -> (Principal);
-        #getVersion : () -> ();
-        #getPositionIds : () -> ();
-        #getLiquidityInfo : () -> ();
-        #getDeposit : () -> (Nat);
-        #getTVL : () -> ();
-        #getConfigCids : () -> ();
-        #getLimitInfo : () -> ();
-        #getRewardMeta : () -> ();
-        #getTokenBalance : () -> ();
-        #getPoolMeta : () -> ();
-        #getStakeRecord : () -> (Nat, Nat, Text);
-        #getDistributeRecord : () -> (Nat, Nat, Text);
-        #getCycleInfo : () -> ();
+        #finishManually : () -> ();
         #getAdmins : () -> ();
+        #getCycleInfo : () -> ();
+        #getDeposit : () -> Nat;
+        #getDistributeRecord : () -> (Nat, Nat, Text);
         #getErrorLog : () -> ();
+        #getFarmInfo : () -> Text;
+        #getInitArgs : () -> ();
+        #getLimitInfo : () -> ();
+        #getLiquidityInfo : () -> ();
+        #getPoolMeta : () -> ();
+        #getPositionIds : () -> ();
+        #getRewardInfo : () -> [Nat];
+        #getRewardMeta : () -> ();
+        #getRewardTokenBalance : () -> ();
+        #getStakeRecord : () -> (Nat, Nat, Text);
+        #getTVL : () -> ();
+        #getUserPositions : () -> Principal;
+        #getUserTVL : () -> Principal;
+        #getVersion : () -> ();
+        #init : () -> ();
+        #restartManually : () -> ();
+        #setAdmins : () -> [Principal];
+        #setLimitInfo : () -> (Nat, Nat, Nat, Bool);
+        #stake : () -> Nat;
+        #unstake : () -> Nat
     };
 
     public type IFarm = actor {
