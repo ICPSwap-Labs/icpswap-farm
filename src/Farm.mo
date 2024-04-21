@@ -764,8 +764,7 @@ shared (initMsg) actor class Farm(
       switch (_canisterId) {
         case (?cid) {
           var balance = await _rewardTokenAdapter.balanceOf({
-            owner = cid;
-            subaccount = null;
+            owner = cid; subaccount = null;
           });
           if (balance < _totalReward) {
             _errorLogBuffer.add("_updateStatus failed: balance=" # debug_show (balance) # ", totalReward=" # debug_show (_totalReward) # ".");
@@ -1145,9 +1144,7 @@ shared (initMsg) actor class Farm(
   system func postupgrade() {
     for (record in _errorLogList.vals()) { _errorLogBuffer.add(record) };
     for (record in _stakeRecordList.vals()) { _stakeRecordBuffer.add(record) };
-    for (record in _distributeRecordList.vals()) {
-      _distributeRecordBuffer.add(record);
-    };
+    for (record in _distributeRecordList.vals()) { _distributeRecordBuffer.add(record); };
     _stakeRecordList := [];
     _distributeRecordList := [];
     _errorLogList := [];
@@ -1155,31 +1152,24 @@ shared (initMsg) actor class Farm(
     _userPositionEntries := [];
   };
 
-  // system func inspect({
-  //   arg : Blob;
-  //   caller : Principal;
-  //   msg : Types.FarmMsg;
-  // }) : Bool {
-  //   return switch (msg) {
-  //     // Controller
-  //     case (#init args) { Prim.isController(caller) };
-  //     case (#setAdmins args) { Prim.isController(caller) };
-  //     // Admin
-  //     case (#finishManually args) {
-  //       CollectionUtils.arrayContains<Principal>(_admins, caller, Principal.equal) or Prim.isController(caller);
-  //     };
-  //     case (#close args) {
-  //       CollectionUtils.arrayContains<Principal>(_admins, caller, Principal.equal) or Prim.isController(caller);
-  //     };
-  //     case (#clearErrorLog args) {
-  //       CollectionUtils.arrayContains<Principal>(_admins, caller, Principal.equal) or Prim.isController(caller);
-  //     };
-  //     case (#setLimitInfo args) {
-  //       CollectionUtils.arrayContains<Principal>(_admins, caller, Principal.equal) or Prim.isController(caller);
-  //     };
-  //     // Anyone
-  //     case (_) { true };
-  //   };
-  // };
+  system func inspect({
+    arg : Blob;
+    caller : Principal;
+    msg : Types.FarmMsg;
+  }) : Bool {
+    return switch (msg) {
+      // Controller
+      case (#init args) { _hasPermission(caller) };
+      case (#setAdmins args) { _hasPermission(caller) };
+      // Admin
+      case (#finishManually args) { _hasAdminPermission(caller); };
+      case (#restartManually args) { _hasAdminPermission(caller); };
+      case (#close args) { _hasAdminPermission(caller); };
+      case (#clearErrorLog args) { _hasAdminPermission(caller); };
+      case (#setLimitInfo args) { _hasAdminPermission(caller); };
+      // Anyone
+      case (_) { true };
+    };
+  };
 
 };
