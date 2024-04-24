@@ -519,7 +519,7 @@ shared (initMsg) actor class Farm(
     });
   };
 
-  public query func getUserPositions(owner : Principal) : async Result.Result<[Types.Deposit], Types.Error> {
+  public query func getUserDeposits(owner : Principal) : async Result.Result<[Types.Deposit], Types.Error> {
     switch (_userPositionMap.get(owner)) {
       case (?list) {
         var buffer = Buffer.Buffer<Types.Deposit>(0);
