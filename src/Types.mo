@@ -204,7 +204,7 @@ module {
         #getRewardTokenBalance : () -> ();
         #getStakeRecord : () -> (Nat, Nat, Text);
         #getTVL : () -> ();
-        #getUserPositions : () -> Principal;
+        #getUserDeposits : () -> Principal;
         #getUserTVL : () -> Principal;
         #getVersion : () -> ();
         #init : () -> ();
