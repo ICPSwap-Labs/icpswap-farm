@@ -177,7 +177,7 @@ module {
         #create : () -> (CreateFarmArgs);
         #updateFarmInfo : () -> (FarmStatus, FarmStatus, TVL);
         #getCycleInfo : () -> ();
-        #getFarms : () -> FarmStatus;
+        #getFarms : () -> ?FarmStatus;
         #getAllFarms : () -> ();
         #getInitArgs : () -> ();
         #getGlobalTVL : () -> ();

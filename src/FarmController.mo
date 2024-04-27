@@ -153,8 +153,14 @@ shared (initMsg) actor class FarmController(
         });
     };
 
-    public query func getFarms(status : Types.FarmStatus) : async Result.Result<[(Principal, Types.TVL)], Text> {
-        return #ok(_farmDataService.getTargetArray(status));
+    public query func getFarms(status : ?Types.FarmStatus) : async Result.Result<[(Principal, Types.TVL)], Text> {
+        switch (status) {
+            case (?#NOT_STARTED) { return #ok(_farmDataService.getTargetArray(#NOT_STARTED)); };
+            case (?#LIVE) { return #ok(_farmDataService.getTargetArray(#LIVE)); };
+            case (?#FINISHED) { return #ok(_farmDataService.getTargetArray(#FINISHED)); };
+            case (?#CLOSED) { return #ok(_farmDataService.getTargetArray(#CLOSED)); };
+            case (null) { return #ok(_farmDataService.getAllArray()); };
+        };
     };
 
     public query func getAllFarms() : async Result.Result<{ NOT_STARTED : [(Principal, Types.TVL)]; LIVE : [(Principal, Types.TVL)]; FINISHED : [(Principal, Types.TVL)]; CLOSED : [(Principal, Types.TVL)] }, Text> {
