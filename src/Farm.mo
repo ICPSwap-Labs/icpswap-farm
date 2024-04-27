@@ -33,7 +33,7 @@ shared (initMsg) actor class Farm(
   private stable var _ICPDecimals : Nat = 0;
 
   // reward meta
-  private stable var _status = Types.NOT_STARTED;
+  private stable var _status : Types.FarmStatus = #NOT_STARTED;
   private stable var _rewardPerCycle : Nat = 0;
   private stable var _currentCycleCount : Nat = 0;
   private stable var _totalCycleCount : Nat = 0;
@@ -107,7 +107,7 @@ shared (initMsg) actor class Farm(
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
   };
   private stable var _farmControllerAct = actor (Principal.toText(initArgs.farmControllerCid)) : actor {
-    updateFarmInfo : shared (previousStatus : Text, status : Text, tvl : Types.TVL) -> async ();
+    updateFarmInfo : shared (previousStatus : Types.FarmStatus, status : Types.FarmStatus, tvl : Types.TVL) -> async ();
   };
 
   private stable var _inited : Bool = false;
@@ -198,8 +198,9 @@ shared (initMsg) actor class Farm(
 
   public shared (msg) func stake(positionId : Nat) : async Result.Result<Text, Types.Error> {
     var nowTime = _getTime();
-    if (not Text.equal(_status, Types.LIVE)) {
-      return #err(#InternalError("Farm is not available for now"));
+    switch (_status) {
+      case (#LIVE) {};
+      case (_) { return #err(#InternalError("Farm is not available for now")) };
     };
 
     // ----- legality check start -----
@@ -312,15 +313,20 @@ shared (initMsg) actor class Farm(
       case (?d) { d };
       case (_) { return #err(#InternalError("No such position")) };
     };
-    if (Text.equal(_status, Types.LIVE)) {
-      if (Principal.notEqual(deposit.owner, msg.caller)) {
-        return #err(#InternalError("You are not the owner of the position"));
+
+    switch (_status) {
+      case (#LIVE) {
+        if (Principal.notEqual(deposit.owner, msg.caller)) {
+          return #err(#InternalError("You are not the owner of the position"));
+        };
       };
-    } else {
-      if (Principal.notEqual(deposit.owner, msg.caller) and (not _hasAdminPermission(msg.caller))) {
-        return #err(#InternalError("Only the owner/admin can unstake the other's position after the incentive end"));
+      case (_) {
+        if (Principal.notEqual(deposit.owner, msg.caller) and (not _hasAdminPermission(msg.caller))) {
+          return #err(#InternalError("Only the owner/admin can unstake the other's position after the incentive end"));
+        };
       };
     };
+
     var fee = await _rewardTokenAdapter.fee();
     switch (await _swapPoolAct.transferPosition(Principal.fromActor(this), deposit.owner, positionId)) {
       case (#ok(status)) {
@@ -378,12 +384,12 @@ shared (initMsg) actor class Farm(
   // todo check if necessary.
   public shared (msg) func finishManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
-    _status := Types.FINISHED;
+    _status := #FINISHED;
     return #ok("Finish farm successfully");
   };
   public shared (msg) func restartManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
-    _status := Types.LIVE;
+    _status := #LIVE;
     return #ok("Restart farm successfully");
   };
   // todo check if necessary.
@@ -417,7 +423,7 @@ shared (initMsg) actor class Farm(
             // notify farm controller to update TVL and status
             await _farmControllerAct.updateFarmInfo(
               previousStatus,
-              Types.CLOSED,
+              #CLOSED,
               {
                 stakedTokenTVL = 0;
                 rewardTokenTVL = 0;
@@ -433,7 +439,7 @@ shared (initMsg) actor class Farm(
               liquidity = 0;
             });
             _totalRewardBalance := 0;
-            _status := Types.CLOSED;
+            _status := #CLOSED;
             _TVL.stakedTokenTVL := 0;
             _TVL.rewardTokenTVL := 0;
           };
@@ -448,14 +454,14 @@ shared (initMsg) actor class Farm(
       // notify farm controller to update TVL and status
       await _farmControllerAct.updateFarmInfo(
         previousStatus,
-        Types.CLOSED,
+        #CLOSED,
         {
           stakedTokenTVL = 0;
           rewardTokenTVL = 0;
         },
       );
       _totalRewardBalance := 0;
-      _status := Types.CLOSED;
+      _status := #CLOSED;
       _TVL.stakedTokenTVL := 0;
       _TVL.rewardTokenTVL := 0;
     };
@@ -760,11 +766,12 @@ shared (initMsg) actor class Farm(
     Debug.print(" ---> _updateStatus ");
     var nowTime = _getTime();
     // check balance
-    if (_status == Types.NOT_STARTED) {
+    if (_status == #NOT_STARTED) {
       switch (_canisterId) {
         case (?cid) {
           var balance = await _rewardTokenAdapter.balanceOf({
-            owner = cid; subaccount = null;
+            owner = cid;
+            subaccount = null;
           });
           if (balance < _totalReward) {
             _errorLogBuffer.add("_updateStatus failed: balance=" # debug_show (balance) # ", totalReward=" # debug_show (_totalReward) # ".");
@@ -776,15 +783,15 @@ shared (initMsg) actor class Farm(
     };
 
     var previousStatus = _status;
-    if (_status != Types.CLOSED and _status != Types.FINISHED) {
+    if (_status != #CLOSED and _status != #FINISHED) {
       if (nowTime > initArgs.startTime and nowTime < initArgs.endTime) {
-        _status := Types.LIVE;
+        _status := #LIVE;
       };
-      if (nowTime < initArgs.startTime) { _status := Types.NOT_STARTED };
-      if (nowTime > initArgs.endTime) { _status := Types.FINISHED };
+      if (nowTime < initArgs.startTime) { _status := #NOT_STARTED };
+      if (nowTime > initArgs.endTime) { _status := #FINISHED };
     };
-    if (_status == Types.FINISHED and (_totalRewardBalance == 0 and _positionIds.size() == 0)) {
-      _status := Types.CLOSED;
+    if (_status == #FINISHED and (_totalRewardBalance == 0 and _positionIds.size() == 0)) {
+      _status := #CLOSED;
     };
     await _farmControllerAct.updateFarmInfo(
       previousStatus,
@@ -882,7 +889,7 @@ shared (initMsg) actor class Farm(
               poolToken0Amount := poolToken0Amount + amountResult.amount0;
               poolToken1Amount := poolToken1Amount + amountResult.amount1;
 
-              if (Text.equal(_status, Types.LIVE)) {
+              if (_status == #LIVE) {
                 let rewardAmount = if (totalTokensOwed0 == 0 and totalTokensOwed1 == 0) {
                   0;
                 } else {
@@ -1144,7 +1151,9 @@ shared (initMsg) actor class Farm(
   system func postupgrade() {
     for (record in _errorLogList.vals()) { _errorLogBuffer.add(record) };
     for (record in _stakeRecordList.vals()) { _stakeRecordBuffer.add(record) };
-    for (record in _distributeRecordList.vals()) { _distributeRecordBuffer.add(record); };
+    for (record in _distributeRecordList.vals()) {
+      _distributeRecordBuffer.add(record);
+    };
     _stakeRecordList := [];
     _distributeRecordList := [];
     _errorLogList := [];
@@ -1162,11 +1171,11 @@ shared (initMsg) actor class Farm(
       case (#init args) { _hasPermission(caller) };
       case (#setAdmins args) { _hasPermission(caller) };
       // Admin
-      case (#finishManually args) { _hasAdminPermission(caller); };
-      case (#restartManually args) { _hasAdminPermission(caller); };
-      case (#close args) { _hasAdminPermission(caller); };
-      case (#clearErrorLog args) { _hasAdminPermission(caller); };
-      case (#setLimitInfo args) { _hasAdminPermission(caller); };
+      case (#finishManually args) { _hasAdminPermission(caller) };
+      case (#restartManually args) { _hasAdminPermission(caller) };
+      case (#close args) { _hasAdminPermission(caller) };
+      case (#clearErrorLog args) { _hasAdminPermission(caller) };
+      case (#setLimitInfo args) { _hasAdminPermission(caller) };
       // Anyone
       case (_) { true };
     };

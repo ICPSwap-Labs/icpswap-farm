@@ -12,11 +12,6 @@ import Prim "mo:⛔";
 
 module {
 
-    public let NOT_STARTED = "NOT_STARTED";
-    public let LIVE = "LIVE";
-    public let FINISHED = "FINISHED";
-    public let CLOSED = "CLOSED";
-
     public func equal(x : Nat, y : Nat) : Bool {
         return Nat.equal(x, y);
     };
@@ -24,6 +19,12 @@ module {
         return Prim.natToNat32(x);
     };
 
+    public type FarmStatus = {
+        #NOT_STARTED;
+        #LIVE;
+        #FINISHED;
+        #CLOSED;
+    };
     public type Page<T> = {
         totalElements : Nat;
         content : [T];
@@ -66,7 +67,7 @@ module {
         endTime : Nat;
         refunder : Principal;
         totalReward : Nat;
-        status : Text;
+        status : FarmStatus;
         secondPerCycle : Nat;
         token0AmountLimit : Nat;
         token1AmountLimit : Nat;
@@ -126,7 +127,7 @@ module {
         totalRewardUnclaimed : Nat;
         numberOfStakes : Nat;
         userNumberOfStakes : Nat;
-        status : Text;
+        status : FarmStatus;
         creator : Principal;
         positionIds: [Nat];
     };
@@ -174,9 +175,9 @@ module {
     };
     public type FarmControllerMsg = {
         #create : () -> (CreateFarmArgs);
-        #updateFarmInfo : () -> (Text, Text, TVL);
+        #updateFarmInfo : () -> (FarmStatus, FarmStatus, TVL);
         #getCycleInfo : () -> ();
-        #getFarms : () -> Text;
+        #getFarms : () -> FarmStatus;
         #getAllFarms : () -> ();
         #getInitArgs : () -> ();
         #getGlobalTVL : () -> ();

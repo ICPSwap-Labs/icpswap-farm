@@ -101,7 +101,7 @@ shared (initMsg) actor class FarmController(
             };
 
             Cycles.add(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ ICP = ICP; rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = Types.NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this) }));
+            var farm = Principal.fromActor(await Farm.Farm({ ICP = ICP; rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this) }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
@@ -122,26 +122,26 @@ shared (initMsg) actor class FarmController(
         };
     };
 
-    public shared (msg) func updateFarmInfo(previousStatus : Text, status : Text, tvl : Types.TVL) : async () {
-        if (Text.equal(status, Types.NOT_STARTED)) {
+    public shared (msg) func updateFarmInfo(previousStatus : Types.FarmStatus, status : Types.FarmStatus, tvl : Types.TVL) : async () {
+        if (status == #NOT_STARTED) {
             _farmDataService.putNotStartedFarm(msg.caller, tvl);
-        } else if (Text.equal(status, Types.LIVE)) {
+        } else if (status == #LIVE) {
             _farmDataService.putLiveFarmFarm(msg.caller, tvl);
-        } else if (Text.equal(status, Types.FINISHED)) {
+        } else if (status == #FINISHED) {
             _farmDataService.putFinishedFarm(msg.caller, tvl);
-        } else if (Text.equal(status, Types.CLOSED)) {
+        } else if (status == #CLOSED) {
             _farmDataService.putClosedFarm(msg.caller, tvl);
         };
 
-        if (Text.equal(previousStatus, status)) return;
+        if (previousStatus == status) return;
 
-        if (Text.equal(previousStatus, Types.NOT_STARTED)) {
+        if (previousStatus == #NOT_STARTED) {
             ignore _farmDataService.removeNotStartedFarm(msg.caller);
-        } else if (Text.equal(previousStatus, Types.LIVE)) {
+        } else if (previousStatus == #LIVE) {
             ignore _farmDataService.removeLiveFarm(msg.caller);
-        } else if (Text.equal(previousStatus, Types.FINISHED)) {
+        } else if (previousStatus == #FINISHED) {
             ignore _farmDataService.removeFinishedFarm(msg.caller);
-        } else if (Text.equal(previousStatus, Types.CLOSED)) {
+        } else if (previousStatus == #CLOSED) {
             ignore _farmDataService.removeClosedFarm(msg.caller);
         };
     };
@@ -153,16 +153,16 @@ shared (initMsg) actor class FarmController(
         });
     };
 
-    public query func getFarms(status : Text) : async Result.Result<[(Principal, Types.TVL)], Text> {
+    public query func getFarms(status : Types.FarmStatus) : async Result.Result<[(Principal, Types.TVL)], Text> {
         return #ok(_farmDataService.getTargetArray(status));
     };
 
     public query func getAllFarms() : async Result.Result<{ NOT_STARTED : [(Principal, Types.TVL)]; LIVE : [(Principal, Types.TVL)]; FINISHED : [(Principal, Types.TVL)]; CLOSED : [(Principal, Types.TVL)] }, Text> {
         return #ok({
-            NOT_STARTED = _farmDataService.getTargetArray(Types.NOT_STARTED);
-            LIVE = _farmDataService.getTargetArray(Types.LIVE);
-            FINISHED = _farmDataService.getTargetArray(Types.FINISHED);
-            CLOSED = _farmDataService.getTargetArray(Types.CLOSED);
+            NOT_STARTED = _farmDataService.getTargetArray(#NOT_STARTED);
+            LIVE = _farmDataService.getTargetArray(#LIVE);
+            FINISHED = _farmDataService.getTargetArray(#FINISHED);
+            CLOSED = _farmDataService.getTargetArray(#CLOSED);
         });
     };
 
@@ -173,7 +173,7 @@ shared (initMsg) actor class FarmController(
     public query func getGlobalTVL() : async Result.Result<Types.TVL, Types.Error> {
         var stakedTokenTVL : Float = 0;
         var rewardTokenTVL : Float = 0;
-        var targetArray = _farmDataService.getTargetArray("");
+        var targetArray = _farmDataService.getAllArray();
         for ((farmCid, farmInfo) in targetArray.vals()) {
             stakedTokenTVL := Float.add(stakedTokenTVL, farmInfo.stakedTokenTVL);
             rewardTokenTVL := Float.add(rewardTokenTVL, farmInfo.rewardTokenTVL);

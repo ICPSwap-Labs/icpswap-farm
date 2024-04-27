@@ -107,23 +107,27 @@ module FarmInfoService {
             return buffer;
         };
 
-        public func getTargetArray(status : Text) : [(Principal, Types.TVL)] {
-            if (Text.equal(status, Types.NOT_STARTED)) {
+        public func getTargetArray(status : Types.FarmStatus) : [(Principal, Types.TVL)] {
+            if (status == #NOT_STARTED) {
                 return Buffer.toArray(getNotStartedFarmBuffer());
-            } else if (Text.equal(status, Types.LIVE)) {
+            } else if (status == #LIVE) {
                 return Buffer.toArray(getLiveFarmFarmBuffer());
-            } else if (Text.equal(status, Types.FINISHED)) {
+            } else if (status == #FINISHED) {
                 return Buffer.toArray(getFinishedFarmBuffer());
-            } else if (Text.equal(status, Types.CLOSED)) {
+            } else if (status == #CLOSED) {
                 return Buffer.toArray(getClosedFarmBuffer());
             } else {
-                var buffer = Buffer.Buffer<(Principal, Types.TVL)>(0);
-                buffer.append(getNotStartedFarmBuffer());
-                buffer.append(getLiveFarmFarmBuffer());
-                buffer.append(getFinishedFarmBuffer());
-                buffer.append(getClosedFarmBuffer());
-                return Buffer.toArray(buffer);
+                return Buffer.toArray(Buffer.Buffer<(Principal, Types.TVL)>(0));
             };
+        };
+
+        public func getAllArray() : [(Principal, Types.TVL)] {
+            var buffer = Buffer.Buffer<(Principal, Types.TVL)>(0);
+            buffer.append(getNotStartedFarmBuffer());
+            buffer.append(getLiveFarmFarmBuffer());
+            buffer.append(getFinishedFarmBuffer());
+            buffer.append(getClosedFarmBuffer());
+            return Buffer.toArray(buffer);
         };
 
         public func getState() : State {
