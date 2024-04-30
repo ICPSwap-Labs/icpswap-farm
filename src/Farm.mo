@@ -75,9 +75,9 @@ shared (initMsg) actor class Farm(
 
   // limit params
   private stable var _positionNumLimit : Nat = 500;
-  private stable var _token0AmountLimit : Nat = 0;
-  private stable var _token1AmountLimit : Nat = 0;
-  private stable var _priceInsideLimit : Bool = false;
+  private stable var _token0AmountLimit : Nat = initArgs.token0AmountLimit;
+  private stable var _token1AmountLimit : Nat = initArgs.token0AmountLimit;
+  private stable var _priceInsideLimit : Bool = initArgs.priceInsideLimit;
 
   // stake metadata
   private stable var _positionIds : [Nat] = [];
