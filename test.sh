@@ -505,5 +505,5 @@ function test()
 
 test
 
-# dfx stop
-# mv dfx.json.bak dfx.json
+dfx stop
+mv dfx.json.bak dfx.json
