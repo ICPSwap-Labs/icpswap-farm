@@ -176,8 +176,8 @@ shared (initMsg) actor class FarmController(
         });
     };
 
-    public query func getInitArgs() : async Result.Result<{ ICP : Types.Token; governanceCid : ?Principal }, Types.Error> {
-        #ok({ ICP = ICP; governanceCid = governanceCid });
+    public query func getInitArgs() : async Result.Result<{ ICP : Types.Token; feeReceiverCid : Principal; governanceCid : ?Principal }, Types.Error> {
+        #ok({ ICP = ICP; feeReceiverCid = feeReceiverCid; governanceCid = governanceCid });
     };
 
     public query func getGlobalTVL() : async Result.Result<Types.TVL, Types.Error> {
