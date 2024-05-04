@@ -43,7 +43,7 @@ module FarmInfoService {
         public func putNotStartedFarm(farmCid : Principal, TVL : Types.TVL) : () {
             return _notStartedFarmMap.put(farmCid, TVL);
         };
-        public func putLiveFarmFarm(farmCid : Principal, TVL : Types.TVL) : () {
+        public func putLiveFarm(farmCid : Principal, TVL : Types.TVL) : () {
             return _liveFarmMap.put(farmCid, TVL);
         };
         public func putFinishedFarm(farmCid : Principal, TVL : Types.TVL) : () {
@@ -76,6 +76,19 @@ module FarmInfoService {
                 case (?tvl) { true };
                 case (null) { false };
             };
+        };
+
+        public func deleteNotStartedFarm(farmCid : Principal) : () {
+            _notStartedFarmMap.delete(farmCid);
+        };
+        public func deleteLiveFarm(farmCid : Principal) : () {
+            _liveFarmMap.delete(farmCid);
+        };
+        public func deleteFinishedFarm(farmCid : Principal) : () {
+            _finishedFarmMap.delete(farmCid);
+        };
+        public func deleteClosedFarm(farmCid : Principal) : () {
+            _closedFarmMap.delete(farmCid);
         };
 
         public func getNotStartedFarmBuffer() : Buffer.Buffer<(Principal, Types.TVL)> {

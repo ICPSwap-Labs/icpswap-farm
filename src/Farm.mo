@@ -41,6 +41,7 @@ shared (initMsg) actor class Farm(
   private stable var _totalRewardBalance = initArgs.totalReward;
   private stable var _totalRewardClaimed = 0;
   private stable var _totalRewardUnclaimed = 0;
+  private stable var _totalRewardFee = 0;
   private stable var _totalLiquidity = 0;
   private stable var _TVL = {
     var stakedTokenTVL : Float = 0;
@@ -107,7 +108,7 @@ shared (initMsg) actor class Farm(
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
   };
   private stable var _farmControllerAct = actor (Principal.toText(initArgs.farmControllerCid)) : actor {
-    updateFarmInfo : shared (previousStatus : Types.FarmStatus, status : Types.FarmStatus, tvl : Types.TVL) -> async ();
+    updateFarmInfo : shared (status : Types.FarmStatus, tvl : Types.TVL) -> async ();
   };
 
   private stable var _inited : Bool = false;
@@ -331,8 +332,9 @@ shared (initMsg) actor class Farm(
     switch (await _swapPoolAct.transferPosition(Principal.fromActor(this), deposit.owner, positionId)) {
       case (#ok(status)) {
         var rewardAmount = 0;
-        if (deposit.rewardAmount > fee) {
-          var amount = deposit.rewardAmount - fee;
+        let distributedFeeResult = _distributeFee(deposit.rewardAmount);
+        if (distributedFeeResult.rewardRedistribution > fee) {
+          var amount = distributedFeeResult.rewardRedistribution - fee;
           try {
             switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = deposit.owner; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null })) {
               case (#Ok(index)) { rewardAmount := amount };
@@ -343,9 +345,9 @@ shared (initMsg) actor class Farm(
           } catch (e) {
             _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # ". Deposit info: " # debug_show (deposit));
           };
-
           _totalRewardUnclaimed := _totalRewardUnclaimed - deposit.rewardAmount;
-          _totalRewardClaimed := _totalRewardClaimed + deposit.rewardAmount;
+          _totalRewardClaimed := _totalRewardClaimed + distributedFeeResult.rewardRedistribution;
+          _totalRewardFee := _totalRewardFee + distributedFeeResult.rewardFee;
         };
         _totalLiquidity := _totalLiquidity - deposit.liquidity;
 
@@ -381,23 +383,80 @@ shared (initMsg) actor class Farm(
     };
   };
 
-  // todo check if necessary.
   public shared (msg) func finishManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #FINISHED;
+    await _farmControllerAct.updateFarmInfo(
+      _status,
+      {
+        stakedTokenTVL = _TVL.stakedTokenTVL;
+        rewardTokenTVL = _TVL.rewardTokenTVL;
+      },
+    );
     return #ok("Finish farm successfully");
   };
+
   public shared (msg) func restartManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #LIVE;
+    await _farmControllerAct.updateFarmInfo(
+      _status,
+      {
+        stakedTokenTVL = _TVL.stakedTokenTVL;
+        rewardTokenTVL = _TVL.rewardTokenTVL;
+      },
+    );
     return #ok("Restart farm successfully");
   };
-  // todo check if necessary.
+
+  public shared (msg) func withdrawRewardFee() : async Result.Result<Text, Types.Error> {
+    assert (_hasAdminPermission(msg.caller) or Principal.equal(msg.caller, initArgs.feeReceiverCid));
+
+    var nowTime = _getTime();
+    var fee = await _rewardTokenAdapter.fee();
+    var balance = await _rewardTokenAdapter.balanceOf({
+      owner = Principal.fromActor(this);
+      subaccount = null;
+    });
+
+    if (_totalRewardFee > fee) {
+      var amount = _totalRewardFee - fee;
+      try {
+        switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.feeReceiverCid; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null })) {
+          case (#Ok(index)) {
+            _stakeRecordBuffer.add({
+              timestamp = nowTime;
+              transType = #withdraw;
+              positionId = 0;
+              from = Principal.fromActor(this);
+              to = initArgs.feeReceiverCid;
+              amount = amount;
+              liquidity = 0;
+            });
+            _totalRewardFee := 0;
+            return #ok("Withdraw successfully");
+          };
+          case (#Err(code)) {
+            _errorLogBuffer.add("Withdraw failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ".");
+            return #err(#InternalError("Withdraw failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # "."));
+          };
+        };
+      } catch (e) {
+        _errorLogBuffer.add("Withdraw failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # ".");
+        return #err(#InternalError("Withdraw failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # "."));
+      };
+    } else {
+      return #err(#InternalError("Withdraw failed: InsufficientFunds."));
+    };
+  };
 
   public shared (msg) func close() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     if (_positionIds.size() > 0) {
       return #err(#InternalError("Please unstake all positions first."));
+    };
+    if (_totalRewardFee > 0) {
+      return #err(#InternalError("Please withdraw reward fee first."));
     };
 
     var nowTime = _getTime();
@@ -420,9 +479,7 @@ shared (initMsg) actor class Farm(
       try {
         switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.refunder; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null })) {
           case (#Ok(index)) {
-            // notify farm controller to update TVL and status
             await _farmControllerAct.updateFarmInfo(
-              previousStatus,
               #CLOSED,
               {
                 stakedTokenTVL = 0;
@@ -451,9 +508,7 @@ shared (initMsg) actor class Farm(
         _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # ".");
       };
     } else {
-      // notify farm controller to update TVL and status
       await _farmControllerAct.updateFarmInfo(
-        previousStatus,
         #CLOSED,
         {
           stakedTokenTVL = 0;
@@ -626,12 +681,13 @@ shared (initMsg) actor class Farm(
     });
   };
 
-  public query func getRewardMeta() : async Result.Result<{ totalReward : Nat; totalRewardClaimed : Nat; totalRewardUnclaimed : Nat; totalRewardBalance : Nat; secondPerCycle : Nat; rewardPerCycle : Nat; currentCycleCount : Nat; totalCycleCount : Nat }, Types.Error> {
+  public query func getRewardMeta() : async Result.Result<{ totalReward : Nat; totalRewardClaimed : Nat; totalRewardUnclaimed : Nat; totalRewardBalance : Nat; totalRewardFee : Nat; secondPerCycle : Nat; rewardPerCycle : Nat; currentCycleCount : Nat; totalCycleCount : Nat }, Types.Error> {
     return #ok({
       totalReward = _totalReward;
       totalRewardClaimed = _totalRewardClaimed;
       totalRewardUnclaimed = _totalRewardUnclaimed;
       totalRewardBalance = _totalRewardBalance;
+      totalRewardFee = _totalRewardFee;
       secondPerCycle = initArgs.secondPerCycle;
       rewardPerCycle = _rewardPerCycle;
       currentCycleCount = _currentCycleCount;
@@ -794,7 +850,6 @@ shared (initMsg) actor class Farm(
       _status := #CLOSED;
     };
     await _farmControllerAct.updateFarmInfo(
-      previousStatus,
       _status,
       {
         stakedTokenTVL = _TVL.stakedTokenTVL;
@@ -834,6 +889,20 @@ shared (initMsg) actor class Farm(
       };
     } catch (e) {
       _errorLogBuffer.add("_syncPoolMeta failed " # debug_show (Error.message(e)) # " . nowTime: " # debug_show (_getTime()));
+    };
+  };
+
+  private func _distributeFee(rewardAmount : Nat) : {
+    rewardRedistribution : Nat;
+    rewardFee : Nat;
+  } {
+    var rewardFee = SafeUint.Uint256(rewardAmount).mul(SafeUint.Uint256(initArgs.fee)).div(SafeUint.Uint256(1000)).val();
+    var rewardRedistribution = if (rewardAmount > rewardFee) {
+      SafeUint.Uint128(rewardAmount).sub(SafeUint.Uint128(rewardFee)).val();
+    } else { rewardFee := 0; rewardAmount };
+    return {
+      rewardRedistribution = rewardRedistribution;
+      rewardFee = rewardFee;
     };
   };
 
@@ -1176,6 +1245,7 @@ shared (initMsg) actor class Farm(
       case (#close args) { _hasAdminPermission(caller) };
       case (#clearErrorLog args) { _hasAdminPermission(caller) };
       case (#setLimitInfo args) { _hasAdminPermission(caller) };
+      case (#withdrawRewardFee args) { _hasAdminPermission(caller) };
       // Anyone
       case (_) { true };
     };

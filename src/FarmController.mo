@@ -26,6 +26,7 @@ import FarmDataService "./components/FarmData";
 
 shared (initMsg) actor class FarmController(
     ICP : Types.Token,
+    feeReceiverCid : Principal,
     governanceCid : ?Principal,
 ) = this {
 
@@ -37,6 +38,9 @@ shared (initMsg) actor class FarmController(
     private stable var ONE_WEEK : Nat = 604800;
     private stable var ONE_DAY : Nat = 86400;
     private stable var ONE_HOUR : Nat = 3600;
+
+    // the fee that is taken from every unstake that is executed on the farm in 1 per thousand
+    private stable var _fee : Nat = 50;
 
     private stable var _farmDataState : FarmDataService.State = {
         notStartedFarmEntries = [];
@@ -101,7 +105,7 @@ shared (initMsg) actor class FarmController(
             };
 
             Cycles.add(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ ICP = ICP; rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this) }));
+            var farm = Principal.fromActor(await Farm.Farm({ ICP = ICP; rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
@@ -122,27 +126,19 @@ shared (initMsg) actor class FarmController(
         };
     };
 
-    public shared (msg) func updateFarmInfo(previousStatus : Types.FarmStatus, status : Types.FarmStatus, tvl : Types.TVL) : async () {
+    public shared (msg) func updateFarmInfo(status : Types.FarmStatus, tvl : Types.TVL) : async () {
+        _farmDataService.deleteNotStartedFarm(msg.caller);
+        _farmDataService.deleteLiveFarm(msg.caller);
+        _farmDataService.deleteFinishedFarm(msg.caller);
+        _farmDataService.deleteClosedFarm(msg.caller);
         if (status == #NOT_STARTED) {
             _farmDataService.putNotStartedFarm(msg.caller, tvl);
         } else if (status == #LIVE) {
-            _farmDataService.putLiveFarmFarm(msg.caller, tvl);
+            _farmDataService.putLiveFarm(msg.caller, tvl);
         } else if (status == #FINISHED) {
             _farmDataService.putFinishedFarm(msg.caller, tvl);
         } else if (status == #CLOSED) {
             _farmDataService.putClosedFarm(msg.caller, tvl);
-        };
-
-        if (previousStatus == status) return;
-
-        if (previousStatus == #NOT_STARTED) {
-            ignore _farmDataService.removeNotStartedFarm(msg.caller);
-        } else if (previousStatus == #LIVE) {
-            ignore _farmDataService.removeLiveFarm(msg.caller);
-        } else if (previousStatus == #FINISHED) {
-            ignore _farmDataService.removeFinishedFarm(msg.caller);
-        } else if (previousStatus == #CLOSED) {
-            ignore _farmDataService.removeClosedFarm(msg.caller);
         };
     };
 
@@ -155,11 +151,19 @@ shared (initMsg) actor class FarmController(
 
     public query func getFarms(status : ?Types.FarmStatus) : async Result.Result<[(Principal, Types.TVL)], Text> {
         switch (status) {
-            case (?#NOT_STARTED) { return #ok(_farmDataService.getTargetArray(#NOT_STARTED)); };
-            case (?#LIVE) { return #ok(_farmDataService.getTargetArray(#LIVE)); };
-            case (?#FINISHED) { return #ok(_farmDataService.getTargetArray(#FINISHED)); };
-            case (?#CLOSED) { return #ok(_farmDataService.getTargetArray(#CLOSED)); };
-            case (null) { return #ok(_farmDataService.getAllArray()); };
+            case (? #NOT_STARTED) {
+                return #ok(_farmDataService.getTargetArray(#NOT_STARTED));
+            };
+            case (? #LIVE) {
+                return #ok(_farmDataService.getTargetArray(#LIVE));
+            };
+            case (? #FINISHED) {
+                return #ok(_farmDataService.getTargetArray(#FINISHED));
+            };
+            case (? #CLOSED) {
+                return #ok(_farmDataService.getTargetArray(#CLOSED));
+            };
+            case (null) { return #ok(_farmDataService.getAllArray()) };
         };
     };
 

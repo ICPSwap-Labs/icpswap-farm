@@ -74,6 +74,8 @@ module {
         priceInsideLimit : Bool;
         creator : Principal;
         farmControllerCid : Principal;
+        feeReceiverCid : Principal;
+        fee : Nat;
     };
     public type PoolMetadata = {
         key : Text;
@@ -136,6 +138,7 @@ module {
         #unstake;
         #claim;
         #distribute;
+        #withdraw;
     };
     public type TVL = {
         stakedTokenTVL : Float;
@@ -175,7 +178,7 @@ module {
     };
     public type FarmControllerMsg = {
         #create : () -> (CreateFarmArgs);
-        #updateFarmInfo : () -> (FarmStatus, FarmStatus, TVL);
+        #updateFarmInfo : () -> (FarmStatus, TVL);
         #getCycleInfo : () -> ();
         #getFarms : () -> ?FarmStatus;
         #getAllFarms : () -> ();
@@ -186,7 +189,7 @@ module {
         #getVersion : () -> ();
     };
     public type FarmMsg = {
-                #clearErrorLog : () -> ();
+        #clearErrorLog : () -> ();
         #close : () -> ();
         #finishManually : () -> ();
         #getAdmins : () -> ();
@@ -213,7 +216,15 @@ module {
         #setAdmins : () -> [Principal];
         #setLimitInfo : () -> (Nat, Nat, Nat, Bool);
         #stake : () -> Nat;
-        #unstake : () -> Nat
+        #unstake : () -> Nat;
+        #withdrawRewardFee : () -> ();
+    };
+    public type FarmFeeReceiver = {
+        #claim : () -> (Principal);
+        #getCycleInfo : () -> ();
+        #getVersion : () -> ();
+        #transfer : () -> (Token, Principal, Nat);
+        #transferAll : () -> (Token, Principal);
     };
 
     public type IFarm = actor {
@@ -224,5 +235,6 @@ module {
         getFarmInfo : query Text -> async Result.Result<FarmInfo, Error>;
         getDeposit : query Nat -> async Result.Result<Deposit, Error>;
         getTVL : query () -> async Result.Result<{ stakedTokenTVL : Float; rewardTokenTVL : Float }, Error>;
+        withdrawRewardFee : query () -> async Result.Result<Text, Error>
     };
 };
