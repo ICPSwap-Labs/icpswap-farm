@@ -501,6 +501,8 @@ function test()
 
     echo "==> close farm"
     close_farm
+
+    sleep 4000
 };
 
 test
