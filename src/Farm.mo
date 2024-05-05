@@ -331,13 +331,24 @@ shared (initMsg) actor class Farm(
     var fee = await _rewardTokenAdapter.fee();
     switch (await _swapPoolAct.transferPosition(Principal.fromActor(this), deposit.owner, positionId)) {
       case (#ok(status)) {
-        var rewardAmount = 0;
+
         let distributedFeeResult = _distributeFee(deposit.rewardAmount);
         if (distributedFeeResult.rewardRedistribution > fee) {
           var amount = distributedFeeResult.rewardRedistribution - fee;
           try {
             switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = deposit.owner; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null })) {
-              case (#Ok(index)) { rewardAmount := amount };
+              case (#Ok(index)) {
+                // unstake reward record
+                _stakeRecordBuffer.add({
+                  timestamp = nowTime;
+                  transType = #unstake;
+                  positionId = positionId;
+                  from = Principal.fromActor(this);
+                  to = deposit.owner;
+                  amount = deposit.rewardAmount;
+                  liquidity = deposit.liquidity;
+                });
+              };
               case (#Err(code)) {
                 _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ". Deposit info: " # debug_show (deposit));
               };
@@ -365,16 +376,6 @@ shared (initMsg) actor class Farm(
         _positionIds := CollectionUtils.arrayRemove<Nat>(_positionIds, positionId, Types.equal);
         _depositMap.delete(positionId);
 
-        // unstake reward record
-        _stakeRecordBuffer.add({
-          timestamp = nowTime;
-          transType = #unstake;
-          positionId = positionId;
-          from = Principal.fromActor(this);
-          to = deposit.owner;
-          amount = rewardAmount;
-          liquidity = deposit.liquidity;
-        });
         return #ok("Unstaked successfully");
       };
       case (msg) {
@@ -414,12 +415,9 @@ shared (initMsg) actor class Farm(
 
     var nowTime = _getTime();
     var fee = await _rewardTokenAdapter.fee();
-    var balance = await _rewardTokenAdapter.balanceOf({
-      owner = Principal.fromActor(this);
-      subaccount = null;
-    });
 
     if (_totalRewardFee > fee) {
+      let totalRewardFee = _totalRewardFee;
       var amount = _totalRewardFee - fee;
       try {
         switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.feeReceiverCid; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null })) {
@@ -430,7 +428,7 @@ shared (initMsg) actor class Farm(
               positionId = 0;
               from = Principal.fromActor(this);
               to = initArgs.feeReceiverCid;
-              amount = amount;
+              amount = totalRewardFee;
               liquidity = 0;
             });
             _totalRewardFee := 0;
