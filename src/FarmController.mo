@@ -36,8 +36,9 @@ shared (initMsg) actor class FarmController(
     private stable var SIX_MONTH : Nat = 15778800;
     private stable var ONE_MONTH : Nat = 2629800;
     private stable var ONE_WEEK : Nat = 604800;
-    private stable var ONE_DAY : Nat = 86400;
-    private stable var ONE_HOUR : Nat = 3600;
+    private stable var TWELVE_HOURS : Nat = 43200;
+    private stable var FOUR_HOURS : Nat = 14400;
+    private stable var THIRTY_MINUTES : Nat = 1800;
 
     // the fee that is taken from every unstake that is executed on the farm in 1 per thousand
     private stable var _fee : Nat = 50;
@@ -69,13 +70,17 @@ shared (initMsg) actor class FarmController(
         var duration = SafeUint.Uint256(args.endTime).sub(SafeUint.Uint256(args.startTime)).val();
         if (duration > ONE_YEAR) {
             return #err("Incentive duration cannot be more than 1 year");
-        } else if (duration > SIX_MONTH) {
-            if (args.secondPerCycle < ONE_DAY) {
-                return #err("The reward distribution cycle cannot be faster than 1 day");
+        } else if (duration >= SIX_MONTH) {
+            if (args.secondPerCycle < TWELVE_HOURS) {
+                return #err("The reward distribution cycle cannot be faster than 12 hours");
             };
-        } else if (duration > ONE_WEEK) {
-            if (args.secondPerCycle < ONE_HOUR) {
-                return #err("The reward distribution cycle cannot be faster than 1 hour");
+        } else if (duration >= ONE_MONTH) {
+            if (args.secondPerCycle < FOUR_HOURS) {
+                return #err("The reward distribution cycle cannot be faster than 4 hours");
+            };
+        } else if (duration >= ONE_WEEK) {
+            if (args.secondPerCycle < THIRTY_MINUTES) {
+                return #err("The reward distribution cycle cannot be faster than 30 minutes");
             };
         } else {
             return #err("Incentive duration cannot be less than 1 week");
@@ -177,7 +182,11 @@ shared (initMsg) actor class FarmController(
     };
 
     public query func getInitArgs() : async Result.Result<{ ICP : Types.Token; feeReceiverCid : Principal; governanceCid : ?Principal }, Types.Error> {
-        #ok({ ICP = ICP; feeReceiverCid = feeReceiverCid; governanceCid = governanceCid });
+        #ok({
+            ICP = ICP;
+            feeReceiverCid = feeReceiverCid;
+            governanceCid = governanceCid;
+        });
     };
 
     public query func getGlobalTVL() : async Result.Result<Types.TVL, Types.Error> {
