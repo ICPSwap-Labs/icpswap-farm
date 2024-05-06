@@ -211,16 +211,6 @@ shared (initMsg) actor class Farm(
       };
       case (_) {};
     };
-    var incomeInfo = switch (await _swapPoolAct.refreshIncome(positionId)) {
-      case (#ok(result)) {
-        if (result.tokensOwed0 > (_poolToken0Fee * 10) or result.tokensOwed1 > (_poolToken1Fee * 10)) {
-          return #err(#InternalError("Please claim the income of position and try again"));
-        };
-      };
-      case (#err(code)) {
-        return #err(#InternalError("Get user position " # debug_show (positionId) # " income data failed: " # debug_show (code)));
-      };
-    };
     var positionInfo = switch (await _swapPoolAct.getUserPosition(positionId)) {
       case (#ok(result)) { result };
       case (#err(code)) {
@@ -331,7 +321,6 @@ shared (initMsg) actor class Farm(
     var fee = await _rewardTokenAdapter.fee();
     switch (await _swapPoolAct.transferPosition(Principal.fromActor(this), deposit.owner, positionId)) {
       case (#ok(status)) {
-
         let distributedFeeResult = _distributeFee(deposit.rewardAmount);
         if (distributedFeeResult.rewardRedistribution > fee) {
           var amount = distributedFeeResult.rewardRedistribution - fee;
@@ -817,7 +806,7 @@ shared (initMsg) actor class Farm(
   };
 
   private func _updateStatus() : async () {
-    Debug.print(" ---> _updateStatus ");
+    // Debug.print(" ---> _updateStatus ");
     var nowTime = _getTime();
     // check balance
     if (_status == #NOT_STARTED) {
@@ -907,9 +896,10 @@ shared (initMsg) actor class Farm(
   private stable var _lastDistributionNum : Nat = 0;
   private func _distributeReward() : async () {
     try {
-      Debug.print(" ---> _distributeReward ");
+      // Debug.print(" ---> _distributeReward ");
       var currentTime = _getTime();
       if (currentTime < initArgs.startTime) { return };
+      if (_status != #LIVE) { return };
 
       var currentCycleTime = initArgs.startTime + initArgs.secondPerCycle * (_currentCycleCount + 1);
       var timeReached = if (currentTime < (currentCycleTime + 30) and (currentTime + 30) > currentCycleTime) {
@@ -927,74 +917,56 @@ shared (initMsg) actor class Farm(
         return;
       };
 
-      let swapFeeResult = switch (await _swapPoolAct.batchRefreshIncome(_positionIds)) {
-        case (#ok(result)) { result };
-        case (#err(code)) {
-          _errorLogBuffer.add("_distributeReward batchRefreshIncome failed " # debug_show (code) # " . nowTime: " # debug_show (currentTime));
-          return;
+      var totalWeightedRatio : Nat = 0;
+      var depositMap = HashMap.fromIter<Nat, Types.Deposit>(Iter.toArray(_depositMap.entries()).vals(), 100, Types.equal, Types.hash);
+
+      for ((id, deposit) in depositMap.entries()) {
+        if ((_priceInsideLimit and (_poolMetadata.tick <= deposit.tickUpper and _poolMetadata.tick >= deposit.tickLower)) or (not _priceInsideLimit)) {
+          totalWeightedRatio := totalWeightedRatio + deposit.liquidity * (currentTime - deposit.initTime);
         };
       };
-      let totalTokensOwed0 = swapFeeResult.totalTokensOwed0;
-      let totalTokensOwed1 = swapFeeResult.totalTokensOwed1;
+      // Debug.print("totalWeightedRatio: " # debug_show (totalWeightedRatio));
 
       var poolToken0Amount : Int = 0;
       var poolToken1Amount : Int = 0;
-      var positionMap = HashMap.fromIter<Nat, Bool>([].vals(), 10, Types.equal, Types.hash);
-
-      for ((positionId, tokensOwed) in swapFeeResult.tokenIncome.vals()) {
-        var isDistributed = switch (positionMap.get(positionId)) {
-          case (?v) { v };
-          case (_) { positionMap.put(positionId, true); false };
+      for ((id, deposit) in depositMap.entries()) {
+        let amountResult = switch (_getTokenAmountByLiquidity(deposit.tickLower, deposit.tickUpper, deposit.liquidity)) {
+          case (#ok(result)) { result };
+          case (#err(msg)) { { amount0 = 0; amount1 = 0 } };
         };
-        if (not isDistributed) {
-          switch (_depositMap.get(positionId)) {
-            case (?deposit) {
-              let amountResult = switch (_getTokenAmountByLiquidity(deposit.tickLower, deposit.tickUpper, deposit.liquidity)) {
-                case (#ok(result)) { result };
-                case (#err(msg)) { { amount0 = 0; amount1 = 0 } };
-              };
-              poolToken0Amount := poolToken0Amount + amountResult.amount0;
-              poolToken1Amount := poolToken1Amount + amountResult.amount1;
-
-              if (_status == #LIVE) {
-                let rewardAmount = if (totalTokensOwed0 == 0 and totalTokensOwed1 == 0) {
-                  0;
-                } else {
-                  _computeReward(tokensOwed.tokensOwed0, tokensOwed.tokensOwed1, totalTokensOwed0, totalTokensOwed1);
-                };
-                _depositMap.put(
-                  positionId,
-                  {
-                    owner = deposit.owner;
-                    holder = deposit.holder;
-                    positionId = deposit.positionId;
-                    tickLower = deposit.tickLower;
-                    tickUpper = deposit.tickUpper;
-                    rewardAmount = deposit.rewardAmount + rewardAmount;
-                    liquidity = deposit.liquidity;
-                    initTime = deposit.initTime;
-                    token0Amount = amountResult.amount0;
-                    token1Amount = amountResult.amount1;
-                  },
-                );
-                // distribute reward record
-                _distributeRecordBuffer.add({
-                  timestamp = currentTime;
-                  positionId = positionId;
-                  owner = deposit.owner;
-                  rewardGained = rewardAmount;
-                  rewardTotal = _rewardPerCycle;
-                });
-              };
-            };
-            case (_) {};
-          };
+        poolToken0Amount := poolToken0Amount + amountResult.amount0;
+        poolToken1Amount := poolToken1Amount + amountResult.amount1;
+        var rewardAmount : Nat = 0;
+        if ((_priceInsideLimit and (_poolMetadata.tick <= deposit.tickUpper and _poolMetadata.tick >= deposit.tickLower)) or (not _priceInsideLimit)) {
+          rewardAmount := _computeReward(deposit.liquidity * (currentTime - deposit.initTime), totalWeightedRatio);
+          // distribute reward record
+          _distributeRecordBuffer.add({
+            timestamp = currentTime;
+            positionId = id;
+            owner = deposit.owner;
+            rewardGained = rewardAmount;
+            rewardTotal = _rewardPerCycle;
+          });
         };
+        _depositMap.put(
+          id,
+          {
+            owner = deposit.owner;
+            holder = deposit.holder;
+            positionId = deposit.positionId;
+            tickLower = deposit.tickLower;
+            tickUpper = deposit.tickUpper;
+            rewardAmount = deposit.rewardAmount + rewardAmount;
+            liquidity = deposit.liquidity;
+            initTime = deposit.initTime;
+            token0Amount = amountResult.amount0;
+            token1Amount = amountResult.amount1;
+          },
+        );
       };
       _currentCycleCount := _currentCycleCount + 1;
       _poolToken0Amount := IntUtils.toNat(poolToken0Amount, 512);
       _poolToken1Amount := IntUtils.toNat(poolToken1Amount, 512);
-      Debug.print("_poolToken0Amount: " # debug_show (_poolToken0Amount) # ". _poolToken1Amount: " # debug_show (_poolToken1Amount));
       // update TVL
       _updateTVL();
     } catch (e) {
@@ -1030,27 +1002,18 @@ shared (initMsg) actor class Farm(
     };
   };
 
-  private func _computeReward(tokensOwed0 : Nat, tokensOwed1 : Nat, totalTokensOwed0 : Nat, totalTokensOwed1 : Nat) : Nat {
+  private func _computeReward(weightedRatio : Nat, totalWeightedRatio : Nat) : Nat {
     var excessDecimal = SafeUint.Uint512(100000000);
-    var token0Xe9 = SafeUint.Uint512(tokensOwed0).mul(excessDecimal);
-    var token1Xe9 = SafeUint.Uint512(tokensOwed1).mul(excessDecimal);
-    Debug.print(" token0Xe9 " # debug_show (token0Xe9.val()) # " token1Xe9 " # debug_show (token1Xe9.val()));
+    var weightedRatioXe9 = SafeUint.Uint512(weightedRatio).mul(excessDecimal);
+    // Debug.print("weightedRatioXe9: " # debug_show (weightedRatioXe9.val()));
 
-    var token0Rate = if (totalTokensOwed0 == 0) { SafeUint.Uint512(0) } else {
-      token0Xe9.div(SafeUint.Uint512(totalTokensOwed0));
+    var rate = if (totalWeightedRatio == 0) { SafeUint.Uint512(0) } else {
+      weightedRatioXe9.div(SafeUint.Uint512(totalWeightedRatio));
     };
-    var token1Rate = if (totalTokensOwed1 == 0) { SafeUint.Uint512(0) } else {
-      token1Xe9.div(SafeUint.Uint512(totalTokensOwed1));
-    };
-    var totalRate = if (totalTokensOwed0 == 0 or totalTokensOwed1 == 0) {
-      token0Rate.add(token1Rate);
-    } else {
-      token0Rate.add(token1Rate).div(SafeUint.Uint512(2));
-    };
-    Debug.print(" token0Rate " # debug_show (token0Rate.val()) # " token1Rate " # debug_show (token1Rate.val()) # " totalRate " # debug_show (totalRate.val()));
+    // Debug.print("rate: " # debug_show (rate.val()));
 
-    var reward = SafeUint.Uint512(_rewardPerCycle).mul(totalRate).div(excessDecimal).val();
-    Debug.print(" reward " # debug_show (reward));
+    var reward = SafeUint.Uint512(_rewardPerCycle).mul(rate).div(excessDecimal).val();
+    // Debug.print("reward: " # debug_show (reward));
 
     _totalRewardUnclaimed := _totalRewardUnclaimed + reward;
     _totalRewardBalance := _totalRewardBalance - reward;
