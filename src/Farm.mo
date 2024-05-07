@@ -326,36 +326,35 @@ shared (initMsg) actor class Farm(
           var amount = distributedFeeResult.rewardRedistribution - fee;
           try {
             switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = deposit.owner; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null })) {
-              case (#Ok(index)) {
-                // unstake reward record
-                _stakeRecordBuffer.add({
-                  timestamp = nowTime;
-                  transType = #unstake;
-                  positionId = positionId;
-                  from = Principal.fromActor(this);
-                  to = deposit.owner;
-                  amount = deposit.rewardAmount;
-                  liquidity = deposit.liquidity;
-                });
-              };
+              case (#Ok(index)) {};
               case (#Err(code)) {
-                _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ". Deposit info: " # debug_show (deposit));
+                _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # ". Code: " # debug_show (code) # ". Deposit info: " # debug_show (deposit));
               };
             };
           } catch (e) {
-            _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # ". Deposit info: " # debug_show (deposit));
+            _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # ". Msg: " # debug_show (Error.message(e)) # ". Deposit info: " # debug_show (deposit));
           };
-          _totalRewardUnclaimed := _totalRewardUnclaimed - deposit.rewardAmount;
-          _totalRewardClaimed := _totalRewardClaimed + distributedFeeResult.rewardRedistribution;
-          _totalRewardFee := _totalRewardFee + distributedFeeResult.rewardFee;
         };
+        _totalRewardUnclaimed := _totalRewardUnclaimed - deposit.rewardAmount;
+        _totalRewardClaimed := _totalRewardClaimed + distributedFeeResult.rewardRedistribution;
+        _totalRewardFee := _totalRewardFee + distributedFeeResult.rewardFee;
         _totalLiquidity := _totalLiquidity - deposit.liquidity;
+        // unstake reward record
+        _stakeRecordBuffer.add({
+          timestamp = nowTime;
+          transType = #unstake;
+          positionId = positionId;
+          from = Principal.fromActor(this);
+          to = deposit.owner;
+          amount = deposit.rewardAmount;
+          liquidity = deposit.liquidity;
+        });
 
         switch (_userPositionMap.get(deposit.owner)) {
           case (?list) {
             var currentPositionIdList = CollectionUtils.arrayRemove<Nat>(list, positionId, Types.equal);
             if (0 == currentPositionIdList.size()) {
-              ignore _userPositionMap.remove(deposit.owner);
+              _userPositionMap.delete(deposit.owner);
             } else {
               _userPositionMap.put(deposit.owner, currentPositionIdList);
             };
