@@ -399,7 +399,7 @@ shared (initMsg) actor class Farm(
   };
 
   public shared (msg) func withdrawRewardFee() : async Result.Result<Text, Types.Error> {
-    assert (_hasAdminPermission(msg.caller) or Principal.equal(msg.caller, initArgs.feeReceiverCid));
+    assert (Principal.equal(msg.caller, initArgs.feeReceiverCid));
 
     var nowTime = _getTime();
     var fee = await _rewardTokenAdapter.fee();
@@ -1205,7 +1205,7 @@ shared (initMsg) actor class Farm(
       case (#close args) { _hasAdminPermission(caller) };
       case (#clearErrorLog args) { _hasAdminPermission(caller) };
       case (#setLimitInfo args) { _hasAdminPermission(caller) };
-      case (#withdrawRewardFee args) { _hasAdminPermission(caller) or Principal.equal(caller, initArgs.feeReceiverCid) };
+      case (#withdrawRewardFee args) { Principal.equal(caller, initArgs.feeReceiverCid) };
       // Anyone
       case (_) { true };
     };
