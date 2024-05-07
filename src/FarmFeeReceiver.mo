@@ -95,7 +95,7 @@ shared (initMsg) actor class FarmFeeReceiver() = this {
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.3.0";
+    private var _version : Text = "3.0.0";
     public query func getVersion() : async Text { _version };
 
     system func preupgrade() {};
