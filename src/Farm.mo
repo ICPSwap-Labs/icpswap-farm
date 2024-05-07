@@ -1205,7 +1205,7 @@ shared (initMsg) actor class Farm(
       case (#close args) { _hasAdminPermission(caller) };
       case (#clearErrorLog args) { _hasAdminPermission(caller) };
       case (#setLimitInfo args) { _hasAdminPermission(caller) };
-      case (#withdrawRewardFee args) { _hasAdminPermission(caller) };
+      case (#withdrawRewardFee args) { _hasAdminPermission(caller) or Principal.equal(caller, initArgs.feeReceiverCid) };
       // Anyone
       case (_) { true };
     };
