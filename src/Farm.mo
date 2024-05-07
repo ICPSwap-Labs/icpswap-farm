@@ -1116,7 +1116,7 @@ shared (initMsg) actor class Farm(
   };
 
   // --------------------------- ACL ------------------------------------
-  private stable var _admins : [Principal] = [initMsg.caller];
+  private stable var _admins : [Principal] = [initArgs.creator];
   public shared (msg) func setAdmins(admins : [Principal]) : async () {
     _checkPermission(msg.caller);
     _admins := admins;
