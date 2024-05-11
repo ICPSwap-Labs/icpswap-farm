@@ -186,6 +186,8 @@ module {
         #getGlobalTVL : () -> ();
         #setAdmins : () -> [Principal];
         #getAdmins : () -> ();
+        #setFee : () -> Nat;
+        #getFee : () -> ();
         #getVersion : () -> ();
     };
     public type FarmMsg = {

@@ -154,6 +154,15 @@ shared (initMsg) actor class FarmController(
         });
     };
 
+    public shared (msg) func setFee(fee : Nat) : async () {
+        _checkAdminPermission(msg.caller);
+        _fee := fee;
+    };
+
+    public query func getFee() : async Result.Result<Nat, Types.Error> {
+        return #ok(_fee);
+    };
+
     public query func getFarms(status : ?Types.FarmStatus) : async Result.Result<[(Principal, Types.TVL)], Text> {
         switch (status) {
             case (? #NOT_STARTED) {
@@ -269,6 +278,7 @@ shared (initMsg) actor class FarmController(
             case (#setAdmins args) { _hasPermission(caller) };
             // Admin
             case (#create args) { _hasAdminPermission(caller) };
+            case (#setFee args) { _hasAdminPermission(caller) };
             // Anyone
             case (_) { true };
         };
