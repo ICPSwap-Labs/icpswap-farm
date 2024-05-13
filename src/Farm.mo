@@ -346,7 +346,7 @@ shared (initMsg) actor class Farm(
           positionId = positionId;
           from = Principal.fromActor(this);
           to = deposit.owner;
-          amount = deposit.rewardAmount;
+          amount = distributedFeeResult.rewardRedistribution;
           liquidity = deposit.liquidity;
         });
 
