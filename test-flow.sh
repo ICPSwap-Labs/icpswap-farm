@@ -300,7 +300,7 @@ function withdraw_reward_fee()
     result=`dfx canister call $farmId getRewardMeta`
     echo "RewardMeta: $result"   
 
-    result=`dfx canister call $farmFeeReceiverId claim "(principal \"$farmId\")"`
+    result=`dfx canister call $farmFeeReceiverId harvest "(principal \"$farmId\")"`
     echo "\033[32m withdraw_reward_fee result: $result \033[0m"
 
     result=`dfx canister call $farmId getRewardMeta`

@@ -125,8 +125,8 @@ module {
         refunder : Principal;
         totalReward : Nat;
         totalRewardBalance : Nat;
-        totalRewardClaimed : Nat;
-        totalRewardUnclaimed : Nat;
+        totalRewardHarvested : Nat;
+        totalRewardUnharvested : Nat;
         numberOfStakes : Nat;
         userNumberOfStakes : Nat;
         status : FarmStatus;
@@ -136,7 +136,7 @@ module {
     public type TransType = {
         #stake;
         #unstake;
-        #claim;
+        #harvest;
         #distribute;
         #withdraw;
     };

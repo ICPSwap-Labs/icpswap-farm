@@ -39,8 +39,8 @@ shared (initMsg) actor class Farm(
   private stable var _totalCycleCount : Nat = 0;
   private stable var _totalReward = initArgs.totalReward;
   private stable var _totalRewardBalance = initArgs.totalReward;
-  private stable var _totalRewardClaimed = 0;
-  private stable var _totalRewardUnclaimed = 0;
+  private stable var _totalRewardHarvested = 0;
+  private stable var _totalRewardUnharvested = 0;
   private stable var _totalRewardFee = 0;
   private stable var _totalLiquidity = 0;
   private stable var _TVL = {
@@ -335,8 +335,8 @@ shared (initMsg) actor class Farm(
             _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # ". Msg: " # debug_show (Error.message(e)) # ". Deposit info: " # debug_show (deposit));
           };
         };
-        _totalRewardUnclaimed := _totalRewardUnclaimed - deposit.rewardAmount;
-        _totalRewardClaimed := _totalRewardClaimed + distributedFeeResult.rewardRedistribution;
+        _totalRewardUnharvested := _totalRewardUnharvested - deposit.rewardAmount;
+        _totalRewardHarvested := _totalRewardHarvested + distributedFeeResult.rewardRedistribution;
         _totalRewardFee := _totalRewardFee + distributedFeeResult.rewardFee;
         _totalLiquidity := _totalLiquidity - deposit.liquidity;
         // unstake reward record
@@ -474,7 +474,7 @@ shared (initMsg) actor class Farm(
             );
             _stakeRecordBuffer.add({
               timestamp = nowTime;
-              transType = #claim;
+              transType = #harvest;
               positionId = 0;
               from = Principal.fromActor(this);
               to = initArgs.refunder;
@@ -553,8 +553,8 @@ shared (initMsg) actor class Farm(
       refunder = initArgs.refunder;
       totalReward = _totalReward;
       totalRewardBalance = _totalRewardBalance;
-      totalRewardClaimed = _totalRewardClaimed;
-      totalRewardUnclaimed = _totalRewardUnclaimed;
+      totalRewardHarvested = _totalRewardHarvested;
+      totalRewardUnharvested = _totalRewardUnharvested;
       farmCid = Principal.fromActor(this);
       status = _status;
       numberOfStakes = _positionIds.size();
@@ -667,11 +667,11 @@ shared (initMsg) actor class Farm(
     });
   };
 
-  public query func getRewardMeta() : async Result.Result<{ totalReward : Nat; totalRewardClaimed : Nat; totalRewardUnclaimed : Nat; totalRewardBalance : Nat; totalRewardFee : Nat; secondPerCycle : Nat; rewardPerCycle : Nat; currentCycleCount : Nat; totalCycleCount : Nat }, Types.Error> {
+  public query func getRewardMeta() : async Result.Result<{ totalReward : Nat; totalRewardHarvested : Nat; totalRewardUnharvested : Nat; totalRewardBalance : Nat; totalRewardFee : Nat; secondPerCycle : Nat; rewardPerCycle : Nat; currentCycleCount : Nat; totalCycleCount : Nat }, Types.Error> {
     return #ok({
       totalReward = _totalReward;
-      totalRewardClaimed = _totalRewardClaimed;
-      totalRewardUnclaimed = _totalRewardUnclaimed;
+      totalRewardHarvested = _totalRewardHarvested;
+      totalRewardUnharvested = _totalRewardUnharvested;
       totalRewardBalance = _totalRewardBalance;
       totalRewardFee = _totalRewardFee;
       secondPerCycle = initArgs.secondPerCycle;
@@ -1014,7 +1014,7 @@ shared (initMsg) actor class Farm(
     var reward = SafeUint.Uint512(_rewardPerCycle).mul(rate).div(excessDecimal).val();
     // Debug.print("reward: " # debug_show (reward));
 
-    _totalRewardUnclaimed := _totalRewardUnclaimed + reward;
+    _totalRewardUnharvested := _totalRewardUnharvested + reward;
     _totalRewardBalance := _totalRewardBalance - reward;
     return reward;
   };
