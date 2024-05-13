@@ -30,7 +30,7 @@ shared (initMsg) actor class FarmControllerValidator(
 
     public shared (msg) func setAdminsValidate(admins : [Principal]) : async Result.Result<Text, Text> {
         assert (Principal.equal(msg.caller, governanceCid));
-        return #ok("admins: " # debug_show (admins));
+        return #ok(debug_show (admins));
     };
 
     public shared (msg) func createValidate(args : Types.CreateFarmArgs) : async Result.Result<Text, Text> {
