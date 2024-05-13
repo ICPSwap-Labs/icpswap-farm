@@ -131,7 +131,7 @@ module {
         userNumberOfStakes : Nat;
         status : FarmStatus;
         creator : Principal;
-        positionIds: [Nat];
+        positionIds : [Nat];
     };
     public type TransType = {
         #stake;
@@ -229,6 +229,13 @@ module {
         #transferAll : () -> (Token, Principal);
     };
 
+    public type IFarmController = actor {
+        create : shared CreateFarmArgs -> async Result.Result<Text, Text>;
+        setAdmins : shared [Principal] -> async ();
+        getAdmins : shared () -> async Result.Result<[Principal], Error>;
+        getCycleInfo : shared () -> async Result.Result<CycleInfo, Error>;
+    };
+
     public type IFarm = actor {
         init : shared () -> async ();
         stake : shared Nat -> async Result.Result<Text, Error>;
@@ -237,6 +244,6 @@ module {
         getFarmInfo : query Text -> async Result.Result<FarmInfo, Error>;
         getDeposit : query Nat -> async Result.Result<Deposit, Error>;
         getTVL : query () -> async Result.Result<{ stakedTokenTVL : Float; rewardTokenTVL : Float }, Error>;
-        withdrawRewardFee : query () -> async Result.Result<Text, Error>
+        withdrawRewardFee : query () -> async Result.Result<Text, Error>;
     };
 };
