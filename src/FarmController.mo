@@ -132,6 +132,10 @@ shared (initMsg) actor class FarmController(
     };
 
     public shared (msg) func updateFarmInfo(status : Types.FarmStatus, tvl : Types.TVL) : async () {
+        if (not CollectionUtils.arrayContains(_farmDataService.getAllFarmId(), msg.caller, Principal.equal)) {
+            return;
+        };
+
         _farmDataService.deleteNotStartedFarm(msg.caller);
         _farmDataService.deleteLiveFarm(msg.caller);
         _farmDataService.deleteFinishedFarm(msg.caller);

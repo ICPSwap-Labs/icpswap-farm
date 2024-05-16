@@ -96,15 +96,11 @@ shared (initMsg) actor class Farm(
   let _ICPAdapter = TokenFactory.getAdapter(initArgs.ICP.address, initArgs.ICP.standard);
   let _rewardTokenAdapter = TokenFactory.getAdapter(initArgs.rewardToken.address, initArgs.rewardToken.standard);
   private stable var _swapPoolAct = actor (Principal.toText(initArgs.pool)) : actor {
-    batchRefreshIncome : query (positionIds : [Nat]) -> async Result.Result<{ totalTokensOwed0 : Nat; totalTokensOwed1 : Nat; tokenIncome : [(Nat, { tokensOwed0 : Nat; tokensOwed1 : Nat })] }, Types.Error>;
-    quote : query (args : Types.SwapArgs) -> async Result.Result<Nat, Types.Error>;
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
     getUserPosition : query (positionId : Nat) -> async Result.Result<Types.UserPositionInfo, Types.Error>;
     transferPosition : shared (from : Principal, to : Principal, positionId : Nat) -> async Result.Result<Bool, Types.Error>;
-    refreshIncome : query (positionId : Nat) -> async Result.Result<{ tokensOwed0 : Nat; tokensOwed1 : Nat }, Types.Error>;
   };
   private stable var _rewardPoolAct = actor (Principal.toText(initArgs.rewardPool)) : actor {
-    quote : query (args : Types.SwapArgs) -> async Result.Result<Nat, Types.Error>;
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
   };
   private stable var _farmControllerAct = actor (Principal.toText(initArgs.farmControllerCid)) : actor {
@@ -112,13 +108,10 @@ shared (initMsg) actor class Farm(
   };
 
   private stable var _inited : Bool = false;
-  private stable var _initLock : Bool = false;
   public shared (msg) func init() : async () {
     _checkPermission(msg.caller);
 
     assert (not _inited);
-    assert (not _initLock);
-    _initLock := true;
 
     _canisterId := ?Principal.fromActor(this);
     var tempRewardTotalCount = SafeUint.Uint512(initArgs.endTime).sub(SafeUint.Uint512(initArgs.startTime)).div(SafeUint.Uint512(initArgs.secondPerCycle)).add(SafeUint.Uint512(1));
@@ -194,7 +187,6 @@ shared (initMsg) actor class Farm(
     };
 
     _inited := true;
-    _initLock := false;
   };
 
   public shared (msg) func stake(positionId : Nat) : async Result.Result<Text, Types.Error> {
@@ -232,14 +224,6 @@ shared (initMsg) actor class Farm(
     };
     if (_token1AmountLimit != 0 and positionTokenAmounts.amount1 < _token1AmountLimit) {
       return #err(#InternalError("The quantity of token1 does not reach the low limit"));
-    };
-    if (_token0AmountLimit != 0 and _token1AmountLimit != 0) {
-      if (positionTokenAmounts.amount0 < _token0AmountLimit) {
-        return #err(#InternalError("The quantity of token0 does not reach the low limit"));
-      };
-      if (positionTokenAmounts.amount1 < _token1AmountLimit) {
-        return #err(#InternalError("The quantity of token1 does not reach the low limit"));
-      };
     };
     if (positionInfo.liquidity <= 0) {
       return #err(#InternalError("Can not stake a position with no liquidity"));
@@ -1003,11 +987,11 @@ shared (initMsg) actor class Farm(
 
   private func _computeReward(weightedRatio : Nat, totalWeightedRatio : Nat) : Nat {
     var excessDecimal = SafeUint.Uint512(100000000);
-    var weightedRatioXe9 = SafeUint.Uint512(weightedRatio).mul(excessDecimal);
-    // Debug.print("weightedRatioXe9: " # debug_show (weightedRatioXe9.val()));
+    var weightedRatioXe8 = SafeUint.Uint512(weightedRatio).mul(excessDecimal);
+    // Debug.print("weightedRatioXe8: " # debug_show (weightedRatioXe8.val()));
 
     var rate = if (totalWeightedRatio == 0) { SafeUint.Uint512(0) } else {
-      weightedRatioXe9.div(SafeUint.Uint512(totalWeightedRatio));
+      weightedRatioXe8.div(SafeUint.Uint512(totalWeightedRatio));
     };
     // Debug.print("rate: " # debug_show (rate.val()));
 
@@ -1017,34 +1001,6 @@ shared (initMsg) actor class Farm(
     _totalRewardUnharvested := _totalRewardUnharvested + reward;
     _totalRewardBalance := _totalRewardBalance - reward;
     return reward;
-  };
-
-  private func _getTokenAmounts(positionIds : [Nat]) : Result.Result<{ totalLiquidity : Nat; totalAmount0 : Int; totalAmount1 : Int }, Types.Error> {
-    if (positionIds.size() == 0) {
-      return #ok({ totalLiquidity = 0; totalAmount0 = 0; totalAmount1 = 0 });
-    };
-    var totalAmount0 : Int = 0;
-    var totalAmount1 : Int = 0;
-    var totalLiquidity : Nat = 0;
-    for (positionId in positionIds.vals()) {
-      switch (_depositMap.get(positionId)) {
-        case (?deposit) {
-          let amountResult = switch (_getTokenAmountByLiquidity(deposit.tickLower, deposit.tickUpper, deposit.liquidity)) {
-            case (#ok(result)) { result };
-            case (#err(msg)) { return #err(#InternalError(msg)) };
-          };
-          totalAmount0 := totalAmount0 + amountResult.amount0;
-          totalAmount1 := totalAmount1 + amountResult.amount1;
-          totalLiquidity := totalLiquidity + deposit.liquidity;
-        };
-        case (_) {};
-      };
-    };
-    return #ok({
-      totalLiquidity = totalLiquidity;
-      totalAmount0 = totalAmount0;
-      totalAmount1 = totalAmount1;
-    });
   };
 
   private func _getTokenAmountByLiquidity(
