@@ -143,6 +143,23 @@ module FarmInfoService {
             return Buffer.toArray(buffer);
         };
 
+        public func getAllFarmId() : [Principal] {
+            var buffer = Buffer.Buffer<Principal>(0);
+            for ((key, value) in Iter.toArray(_notStartedFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
+            for ((key, value) in Iter.toArray(_liveFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
+            for ((key, value) in Iter.toArray(_finishedFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
+            for ((key, value) in Iter.toArray(_closedFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
+            return Buffer.toArray(buffer);
+        };
+
         public func getState() : State {
             return {
                 notStartedFarmEntries = Iter.toArray(_notStartedFarmMap.entries());
