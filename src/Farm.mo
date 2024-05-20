@@ -1093,7 +1093,7 @@ shared (initMsg) actor class Farm(
   };
 
   private func _hasPermission(caller : Principal) : Bool {
-    return Prim.isController(caller);
+    return Prim.isController(caller) or (switch (initArgs.governanceCid) { case (?cid) { Principal.equal(caller, cid) }; case (_) { false } });
   };
 
   // --------------------------- ERROR LOG ------------------------------------

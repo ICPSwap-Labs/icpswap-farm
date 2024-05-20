@@ -76,6 +76,7 @@ module {
         farmControllerCid : Principal;
         feeReceiverCid : Principal;
         fee : Nat;
+        governanceCid : ?Principal;
     };
     public type PoolMetadata = {
         key : Text;
