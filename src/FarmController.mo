@@ -205,8 +205,7 @@ shared (initMsg) actor class FarmController(
     public query func getGlobalTVL() : async Result.Result<Types.TVL, Types.Error> {
         var stakedTokenTVL : Float = 0;
         var rewardTokenTV : Float = 0;
-        var targetArray = _farmDataService.getAllArray();
-        for ((farmCid, farmInfo) in targetArray.vals()) {
+        for ((farmCid, farmInfo) in Buffer.toArray(_farmDataService.getLiveFarmBuffer()).vals()) {
             stakedTokenTVL := Float.add(stakedTokenTVL, farmInfo.stakedTokenTVL);
             rewardTokenTV := Float.add(rewardTokenTV, farmInfo.rewardTokenTV);
         };
