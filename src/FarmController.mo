@@ -119,7 +119,7 @@ shared (initMsg) actor class FarmController(
                 farm,
                 {
                     stakedTokenTVL = 0;
-                    rewardTokenTVL = 0;
+                    rewardTokenTV = 0;
                 },
             );
 
@@ -204,15 +204,15 @@ shared (initMsg) actor class FarmController(
 
     public query func getGlobalTVL() : async Result.Result<Types.TVL, Types.Error> {
         var stakedTokenTVL : Float = 0;
-        var rewardTokenTVL : Float = 0;
+        var rewardTokenTV : Float = 0;
         var targetArray = _farmDataService.getAllArray();
         for ((farmCid, farmInfo) in targetArray.vals()) {
             stakedTokenTVL := Float.add(stakedTokenTVL, farmInfo.stakedTokenTVL);
-            rewardTokenTVL := Float.add(rewardTokenTVL, farmInfo.rewardTokenTVL);
+            rewardTokenTV := Float.add(rewardTokenTV, farmInfo.rewardTokenTV);
         };
         return #ok({
             stakedTokenTVL = stakedTokenTVL;
-            rewardTokenTVL = rewardTokenTVL;
+            rewardTokenTV = rewardTokenTV;
         });
     };
 

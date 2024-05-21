@@ -45,7 +45,7 @@ shared (initMsg) actor class Farm(
   private stable var _totalLiquidity = 0;
   private stable var _TVL = {
     var stakedTokenTVL : Float = 0;
-    var rewardTokenTVL : Float = 0;
+    var rewardTokenTV : Float = 0;
   };
 
   // position pool metadata
@@ -77,7 +77,7 @@ shared (initMsg) actor class Farm(
   // limit params
   private stable var _positionNumLimit : Nat = 500;
   private stable var _token0AmountLimit : Nat = initArgs.token0AmountLimit;
-  private stable var _token1AmountLimit : Nat = initArgs.token0AmountLimit;
+  private stable var _token1AmountLimit : Nat = initArgs.token1AmountLimit;
   private stable var _priceInsideLimit : Bool = initArgs.priceInsideLimit;
 
   // stake metadata
@@ -114,7 +114,7 @@ shared (initMsg) actor class Farm(
     assert (not _inited);
 
     _canisterId := ?Principal.fromActor(this);
-    var tempRewardTotalCount = SafeUint.Uint512(initArgs.endTime).sub(SafeUint.Uint512(initArgs.startTime)).div(SafeUint.Uint512(initArgs.secondPerCycle)).add(SafeUint.Uint512(1));
+    var tempRewardTotalCount = SafeUint.Uint512(initArgs.endTime).sub(SafeUint.Uint512(initArgs.startTime)).div(SafeUint.Uint512(initArgs.secondPerCycle));
     _totalCycleCount := tempRewardTotalCount.val();
     _rewardPerCycle := SafeUint.Uint512(_totalReward).div(tempRewardTotalCount).val();
 
@@ -363,7 +363,7 @@ shared (initMsg) actor class Farm(
       _status,
       {
         stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTVL = _TVL.rewardTokenTVL;
+        rewardTokenTV = _TVL.rewardTokenTV;
       },
     );
     return #ok("Finish farm successfully");
@@ -376,7 +376,7 @@ shared (initMsg) actor class Farm(
       _status,
       {
         stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTVL = _TVL.rewardTokenTVL;
+        rewardTokenTV = _TVL.rewardTokenTV;
       },
     );
     return #ok("Restart farm successfully");
@@ -453,7 +453,7 @@ shared (initMsg) actor class Farm(
               #CLOSED,
               {
                 stakedTokenTVL = 0;
-                rewardTokenTVL = 0;
+                rewardTokenTV = 0;
               },
             );
             _stakeRecordBuffer.add({
@@ -462,13 +462,13 @@ shared (initMsg) actor class Farm(
               positionId = 0;
               from = Principal.fromActor(this);
               to = initArgs.refunder;
-              amount = amount;
+              amount = balance;
               liquidity = 0;
             });
             _totalRewardBalance := 0;
             _status := #CLOSED;
             _TVL.stakedTokenTVL := 0;
-            _TVL.rewardTokenTVL := 0;
+            _TVL.rewardTokenTV := 0;
           };
           case (#Err(code)) {
             _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ".");
@@ -482,13 +482,13 @@ shared (initMsg) actor class Farm(
         #CLOSED,
         {
           stakedTokenTVL = 0;
-          rewardTokenTVL = 0;
+          rewardTokenTV = 0;
         },
       );
       _totalRewardBalance := 0;
       _status := #CLOSED;
       _TVL.stakedTokenTVL := 0;
-      _TVL.rewardTokenTVL := 0;
+      _TVL.rewardTokenTV := 0;
     };
 
     return #ok("Close successfully");
@@ -545,8 +545,6 @@ shared (initMsg) actor class Farm(
       userNumberOfStakes = userPositionIds.size();
       positionIds = Buffer.toArray(userPositionIds);
       creator = initArgs.creator;
-      stakedTokenTVL = _TVL.stakedTokenTVL;
-      rewardTokenTVL = _TVL.rewardTokenTVL;
     });
   };
 
@@ -631,10 +629,10 @@ shared (initMsg) actor class Farm(
     };
   };
 
-  public query func getTVL() : async Result.Result<{ stakedTokenTVL : Float; rewardTokenTVL : Float }, Types.Error> {
+  public query func getTVL() : async Result.Result<{ stakedTokenTVL : Float; rewardTokenTV : Float }, Types.Error> {
     return #ok({
       stakedTokenTVL = _TVL.stakedTokenTVL;
-      rewardTokenTVL = _TVL.rewardTokenTVL;
+      rewardTokenTV = _TVL.rewardTokenTV;
     });
   };
 
@@ -823,7 +821,7 @@ shared (initMsg) actor class Farm(
       _status,
       {
         stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTVL = _TVL.rewardTokenTVL;
+        rewardTokenTV = _TVL.rewardTokenTV;
       },
     );
   };
@@ -975,7 +973,7 @@ shared (initMsg) actor class Farm(
         Float.div(Float.fromInt(_poolToken0Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken0Decimals).val())),
       );
     };
-    _TVL.rewardTokenTVL := if (Text.equal(initArgs.ICP.address, initArgs.rewardToken.address)) {
+    _TVL.rewardTokenTV := if (Text.equal(initArgs.ICP.address, initArgs.rewardToken.address)) {
       Float.div(Float.fromInt(_totalReward), Float.fromInt(SafeInt.Int256(10 ** _rewardTokenDecimals).val()));
     } else {
       Float.mul(
