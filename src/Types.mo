@@ -76,6 +76,7 @@ module {
         farmControllerCid : Principal;
         feeReceiverCid : Principal;
         fee : Nat;
+        governanceCid : ?Principal;
     };
     public type PoolMetadata = {
         key : Text;
@@ -125,8 +126,8 @@ module {
         refunder : Principal;
         totalReward : Nat;
         totalRewardBalance : Nat;
-        totalRewardClaimed : Nat;
-        totalRewardUnclaimed : Nat;
+        totalRewardHarvested : Nat;
+        totalRewardUnharvested : Nat;
         numberOfStakes : Nat;
         userNumberOfStakes : Nat;
         status : FarmStatus;
@@ -136,13 +137,13 @@ module {
     public type TransType = {
         #stake;
         #unstake;
-        #claim;
+        #harvest;
         #distribute;
         #withdraw;
     };
     public type TVL = {
         stakedTokenTVL : Float;
-        rewardTokenTVL : Float;
+        rewardTokenTV : Float;
     };
     public type SwapPositionInfo = {
         pool : Text;

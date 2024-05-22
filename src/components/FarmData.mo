@@ -98,7 +98,7 @@ module FarmInfoService {
             };
             return buffer;
         };
-        public func getLiveFarmFarmBuffer() : Buffer.Buffer<(Principal, Types.TVL)> {
+        public func getLiveFarmBuffer() : Buffer.Buffer<(Principal, Types.TVL)> {
             var buffer = Buffer.Buffer<(Principal, Types.TVL)>(0);
             for (tvl in Iter.toArray(_liveFarmMap.entries()).vals()) {
                 buffer.add(tvl);
@@ -124,7 +124,7 @@ module FarmInfoService {
             if (status == #NOT_STARTED) {
                 return Buffer.toArray(getNotStartedFarmBuffer());
             } else if (status == #LIVE) {
-                return Buffer.toArray(getLiveFarmFarmBuffer());
+                return Buffer.toArray(getLiveFarmBuffer());
             } else if (status == #FINISHED) {
                 return Buffer.toArray(getFinishedFarmBuffer());
             } else if (status == #CLOSED) {
@@ -137,9 +137,26 @@ module FarmInfoService {
         public func getAllArray() : [(Principal, Types.TVL)] {
             var buffer = Buffer.Buffer<(Principal, Types.TVL)>(0);
             buffer.append(getNotStartedFarmBuffer());
-            buffer.append(getLiveFarmFarmBuffer());
+            buffer.append(getLiveFarmBuffer());
             buffer.append(getFinishedFarmBuffer());
             buffer.append(getClosedFarmBuffer());
+            return Buffer.toArray(buffer);
+        };
+
+        public func getAllFarmId() : [Principal] {
+            var buffer = Buffer.Buffer<Principal>(0);
+            for ((key, value) in Iter.toArray(_notStartedFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
+            for ((key, value) in Iter.toArray(_liveFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
+            for ((key, value) in Iter.toArray(_finishedFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
+            for ((key, value) in Iter.toArray(_closedFarmMap.entries()).vals()) {
+                buffer.add(key);
+            };
             return Buffer.toArray(buffer);
         };
 

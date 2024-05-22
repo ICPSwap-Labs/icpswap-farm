@@ -39,13 +39,13 @@ shared (initMsg) actor class Farm(
   private stable var _totalCycleCount : Nat = 0;
   private stable var _totalReward = initArgs.totalReward;
   private stable var _totalRewardBalance = initArgs.totalReward;
-  private stable var _totalRewardClaimed = 0;
-  private stable var _totalRewardUnclaimed = 0;
+  private stable var _totalRewardHarvested = 0;
+  private stable var _totalRewardUnharvested = 0;
   private stable var _totalRewardFee = 0;
   private stable var _totalLiquidity = 0;
   private stable var _TVL = {
     var stakedTokenTVL : Float = 0;
-    var rewardTokenTVL : Float = 0;
+    var rewardTokenTV : Float = 0;
   };
 
   // position pool metadata
@@ -77,7 +77,7 @@ shared (initMsg) actor class Farm(
   // limit params
   private stable var _positionNumLimit : Nat = 500;
   private stable var _token0AmountLimit : Nat = initArgs.token0AmountLimit;
-  private stable var _token1AmountLimit : Nat = initArgs.token0AmountLimit;
+  private stable var _token1AmountLimit : Nat = initArgs.token1AmountLimit;
   private stable var _priceInsideLimit : Bool = initArgs.priceInsideLimit;
 
   // stake metadata
@@ -96,15 +96,11 @@ shared (initMsg) actor class Farm(
   let _ICPAdapter = TokenFactory.getAdapter(initArgs.ICP.address, initArgs.ICP.standard);
   let _rewardTokenAdapter = TokenFactory.getAdapter(initArgs.rewardToken.address, initArgs.rewardToken.standard);
   private stable var _swapPoolAct = actor (Principal.toText(initArgs.pool)) : actor {
-    batchRefreshIncome : query (positionIds : [Nat]) -> async Result.Result<{ totalTokensOwed0 : Nat; totalTokensOwed1 : Nat; tokenIncome : [(Nat, { tokensOwed0 : Nat; tokensOwed1 : Nat })] }, Types.Error>;
-    quote : query (args : Types.SwapArgs) -> async Result.Result<Nat, Types.Error>;
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
     getUserPosition : query (positionId : Nat) -> async Result.Result<Types.UserPositionInfo, Types.Error>;
     transferPosition : shared (from : Principal, to : Principal, positionId : Nat) -> async Result.Result<Bool, Types.Error>;
-    refreshIncome : query (positionId : Nat) -> async Result.Result<{ tokensOwed0 : Nat; tokensOwed1 : Nat }, Types.Error>;
   };
   private stable var _rewardPoolAct = actor (Principal.toText(initArgs.rewardPool)) : actor {
-    quote : query (args : Types.SwapArgs) -> async Result.Result<Nat, Types.Error>;
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
   };
   private stable var _farmControllerAct = actor (Principal.toText(initArgs.farmControllerCid)) : actor {
@@ -112,16 +108,13 @@ shared (initMsg) actor class Farm(
   };
 
   private stable var _inited : Bool = false;
-  private stable var _initLock : Bool = false;
   public shared (msg) func init() : async () {
     _checkPermission(msg.caller);
 
     assert (not _inited);
-    assert (not _initLock);
-    _initLock := true;
 
     _canisterId := ?Principal.fromActor(this);
-    var tempRewardTotalCount = SafeUint.Uint512(initArgs.endTime).sub(SafeUint.Uint512(initArgs.startTime)).div(SafeUint.Uint512(initArgs.secondPerCycle)).add(SafeUint.Uint512(1));
+    var tempRewardTotalCount = SafeUint.Uint512(initArgs.endTime).sub(SafeUint.Uint512(initArgs.startTime)).div(SafeUint.Uint512(initArgs.secondPerCycle));
     _totalCycleCount := tempRewardTotalCount.val();
     _rewardPerCycle := SafeUint.Uint512(_totalReward).div(tempRewardTotalCount).val();
 
@@ -194,7 +187,6 @@ shared (initMsg) actor class Farm(
     };
 
     _inited := true;
-    _initLock := false;
   };
 
   public shared (msg) func stake(positionId : Nat) : async Result.Result<Text, Types.Error> {
@@ -232,14 +224,6 @@ shared (initMsg) actor class Farm(
     };
     if (_token1AmountLimit != 0 and positionTokenAmounts.amount1 < _token1AmountLimit) {
       return #err(#InternalError("The quantity of token1 does not reach the low limit"));
-    };
-    if (_token0AmountLimit != 0 and _token1AmountLimit != 0) {
-      if (positionTokenAmounts.amount0 < _token0AmountLimit) {
-        return #err(#InternalError("The quantity of token0 does not reach the low limit"));
-      };
-      if (positionTokenAmounts.amount1 < _token1AmountLimit) {
-        return #err(#InternalError("The quantity of token1 does not reach the low limit"));
-      };
     };
     if (positionInfo.liquidity <= 0) {
       return #err(#InternalError("Can not stake a position with no liquidity"));
@@ -335,8 +319,8 @@ shared (initMsg) actor class Farm(
             _errorLogBuffer.add("Pay reward failed at " # debug_show (nowTime) # ". Msg: " # debug_show (Error.message(e)) # ". Deposit info: " # debug_show (deposit));
           };
         };
-        _totalRewardUnclaimed := _totalRewardUnclaimed - deposit.rewardAmount;
-        _totalRewardClaimed := _totalRewardClaimed + distributedFeeResult.rewardRedistribution;
+        _totalRewardUnharvested := _totalRewardUnharvested - deposit.rewardAmount;
+        _totalRewardHarvested := _totalRewardHarvested + distributedFeeResult.rewardRedistribution;
         _totalRewardFee := _totalRewardFee + distributedFeeResult.rewardFee;
         _totalLiquidity := _totalLiquidity - deposit.liquidity;
         // unstake reward record
@@ -346,7 +330,7 @@ shared (initMsg) actor class Farm(
           positionId = positionId;
           from = Principal.fromActor(this);
           to = deposit.owner;
-          amount = deposit.rewardAmount;
+          amount = distributedFeeResult.rewardRedistribution;
           liquidity = deposit.liquidity;
         });
 
@@ -379,7 +363,7 @@ shared (initMsg) actor class Farm(
       _status,
       {
         stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTVL = _TVL.rewardTokenTVL;
+        rewardTokenTV = _TVL.rewardTokenTV;
       },
     );
     return #ok("Finish farm successfully");
@@ -392,7 +376,7 @@ shared (initMsg) actor class Farm(
       _status,
       {
         stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTVL = _TVL.rewardTokenTVL;
+        rewardTokenTV = _TVL.rewardTokenTV;
       },
     );
     return #ok("Restart farm successfully");
@@ -469,22 +453,22 @@ shared (initMsg) actor class Farm(
               #CLOSED,
               {
                 stakedTokenTVL = 0;
-                rewardTokenTVL = 0;
+                rewardTokenTV = 0;
               },
             );
             _stakeRecordBuffer.add({
               timestamp = nowTime;
-              transType = #claim;
+              transType = #harvest;
               positionId = 0;
               from = Principal.fromActor(this);
               to = initArgs.refunder;
-              amount = amount;
+              amount = balance;
               liquidity = 0;
             });
             _totalRewardBalance := 0;
             _status := #CLOSED;
             _TVL.stakedTokenTVL := 0;
-            _TVL.rewardTokenTVL := 0;
+            _TVL.rewardTokenTV := 0;
           };
           case (#Err(code)) {
             _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ".");
@@ -498,13 +482,13 @@ shared (initMsg) actor class Farm(
         #CLOSED,
         {
           stakedTokenTVL = 0;
-          rewardTokenTVL = 0;
+          rewardTokenTV = 0;
         },
       );
       _totalRewardBalance := 0;
       _status := #CLOSED;
       _TVL.stakedTokenTVL := 0;
-      _TVL.rewardTokenTVL := 0;
+      _TVL.rewardTokenTV := 0;
     };
 
     return #ok("Close successfully");
@@ -553,16 +537,14 @@ shared (initMsg) actor class Farm(
       refunder = initArgs.refunder;
       totalReward = _totalReward;
       totalRewardBalance = _totalRewardBalance;
-      totalRewardClaimed = _totalRewardClaimed;
-      totalRewardUnclaimed = _totalRewardUnclaimed;
+      totalRewardHarvested = _totalRewardHarvested;
+      totalRewardUnharvested = _totalRewardUnharvested;
       farmCid = Principal.fromActor(this);
       status = _status;
       numberOfStakes = _positionIds.size();
       userNumberOfStakes = userPositionIds.size();
       positionIds = Buffer.toArray(userPositionIds);
       creator = initArgs.creator;
-      stakedTokenTVL = _TVL.stakedTokenTVL;
-      rewardTokenTVL = _TVL.rewardTokenTVL;
     });
   };
 
@@ -647,10 +629,10 @@ shared (initMsg) actor class Farm(
     };
   };
 
-  public query func getTVL() : async Result.Result<{ stakedTokenTVL : Float; rewardTokenTVL : Float }, Types.Error> {
+  public query func getTVL() : async Result.Result<{ stakedTokenTVL : Float; rewardTokenTV : Float }, Types.Error> {
     return #ok({
       stakedTokenTVL = _TVL.stakedTokenTVL;
-      rewardTokenTVL = _TVL.rewardTokenTVL;
+      rewardTokenTV = _TVL.rewardTokenTV;
     });
   };
 
@@ -667,11 +649,11 @@ shared (initMsg) actor class Farm(
     });
   };
 
-  public query func getRewardMeta() : async Result.Result<{ totalReward : Nat; totalRewardClaimed : Nat; totalRewardUnclaimed : Nat; totalRewardBalance : Nat; totalRewardFee : Nat; secondPerCycle : Nat; rewardPerCycle : Nat; currentCycleCount : Nat; totalCycleCount : Nat }, Types.Error> {
+  public query func getRewardMeta() : async Result.Result<{ totalReward : Nat; totalRewardHarvested : Nat; totalRewardUnharvested : Nat; totalRewardBalance : Nat; totalRewardFee : Nat; secondPerCycle : Nat; rewardPerCycle : Nat; currentCycleCount : Nat; totalCycleCount : Nat }, Types.Error> {
     return #ok({
       totalReward = _totalReward;
-      totalRewardClaimed = _totalRewardClaimed;
-      totalRewardUnclaimed = _totalRewardUnclaimed;
+      totalRewardHarvested = _totalRewardHarvested;
+      totalRewardUnharvested = _totalRewardUnharvested;
       totalRewardBalance = _totalRewardBalance;
       totalRewardFee = _totalRewardFee;
       secondPerCycle = initArgs.secondPerCycle;
@@ -839,7 +821,7 @@ shared (initMsg) actor class Farm(
       _status,
       {
         stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTVL = _TVL.rewardTokenTVL;
+        rewardTokenTV = _TVL.rewardTokenTV;
       },
     );
   };
@@ -991,7 +973,7 @@ shared (initMsg) actor class Farm(
         Float.div(Float.fromInt(_poolToken0Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken0Decimals).val())),
       );
     };
-    _TVL.rewardTokenTVL := if (Text.equal(initArgs.ICP.address, initArgs.rewardToken.address)) {
+    _TVL.rewardTokenTV := if (Text.equal(initArgs.ICP.address, initArgs.rewardToken.address)) {
       Float.div(Float.fromInt(_totalReward), Float.fromInt(SafeInt.Int256(10 ** _rewardTokenDecimals).val()));
     } else {
       Float.mul(
@@ -1003,48 +985,20 @@ shared (initMsg) actor class Farm(
 
   private func _computeReward(weightedRatio : Nat, totalWeightedRatio : Nat) : Nat {
     var excessDecimal = SafeUint.Uint512(100000000);
-    var weightedRatioXe9 = SafeUint.Uint512(weightedRatio).mul(excessDecimal);
-    // Debug.print("weightedRatioXe9: " # debug_show (weightedRatioXe9.val()));
+    var weightedRatioXe8 = SafeUint.Uint512(weightedRatio).mul(excessDecimal);
+    // Debug.print("weightedRatioXe8: " # debug_show (weightedRatioXe8.val()));
 
     var rate = if (totalWeightedRatio == 0) { SafeUint.Uint512(0) } else {
-      weightedRatioXe9.div(SafeUint.Uint512(totalWeightedRatio));
+      weightedRatioXe8.div(SafeUint.Uint512(totalWeightedRatio));
     };
     // Debug.print("rate: " # debug_show (rate.val()));
 
     var reward = SafeUint.Uint512(_rewardPerCycle).mul(rate).div(excessDecimal).val();
     // Debug.print("reward: " # debug_show (reward));
 
-    _totalRewardUnclaimed := _totalRewardUnclaimed + reward;
+    _totalRewardUnharvested := _totalRewardUnharvested + reward;
     _totalRewardBalance := _totalRewardBalance - reward;
     return reward;
-  };
-
-  private func _getTokenAmounts(positionIds : [Nat]) : Result.Result<{ totalLiquidity : Nat; totalAmount0 : Int; totalAmount1 : Int }, Types.Error> {
-    if (positionIds.size() == 0) {
-      return #ok({ totalLiquidity = 0; totalAmount0 = 0; totalAmount1 = 0 });
-    };
-    var totalAmount0 : Int = 0;
-    var totalAmount1 : Int = 0;
-    var totalLiquidity : Nat = 0;
-    for (positionId in positionIds.vals()) {
-      switch (_depositMap.get(positionId)) {
-        case (?deposit) {
-          let amountResult = switch (_getTokenAmountByLiquidity(deposit.tickLower, deposit.tickUpper, deposit.liquidity)) {
-            case (#ok(result)) { result };
-            case (#err(msg)) { return #err(#InternalError(msg)) };
-          };
-          totalAmount0 := totalAmount0 + amountResult.amount0;
-          totalAmount1 := totalAmount1 + amountResult.amount1;
-          totalLiquidity := totalLiquidity + deposit.liquidity;
-        };
-        case (_) {};
-      };
-    };
-    return #ok({
-      totalLiquidity = totalLiquidity;
-      totalAmount0 = totalAmount0;
-      totalAmount1 = totalAmount1;
-    });
   };
 
   private func _getTokenAmountByLiquidity(
@@ -1137,7 +1091,7 @@ shared (initMsg) actor class Farm(
   };
 
   private func _hasPermission(caller : Principal) : Bool {
-    return Prim.isController(caller);
+    return Prim.isController(caller) or (switch (initArgs.governanceCid) { case (?cid) { Principal.equal(caller, cid) }; case (_) { false } });
   };
 
   // --------------------------- ERROR LOG ------------------------------------
