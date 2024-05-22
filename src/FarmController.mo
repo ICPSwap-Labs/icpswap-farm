@@ -110,7 +110,7 @@ shared (initMsg) actor class FarmController(
             };
 
             Cycles.add(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ ICP = ICP; rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee }));
+            var farm = Principal.fromActor(await Farm.Farm({ ICP = ICP; rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
@@ -119,7 +119,7 @@ shared (initMsg) actor class FarmController(
                 farm,
                 {
                     stakedTokenTVL = 0;
-                    rewardTokenTVL = 0;
+                    rewardTokenTV = 0;
                 },
             );
 
@@ -204,15 +204,14 @@ shared (initMsg) actor class FarmController(
 
     public query func getGlobalTVL() : async Result.Result<Types.TVL, Types.Error> {
         var stakedTokenTVL : Float = 0;
-        var rewardTokenTVL : Float = 0;
-        var targetArray = _farmDataService.getAllArray();
-        for ((farmCid, farmInfo) in targetArray.vals()) {
+        var rewardTokenTV : Float = 0;
+        for ((farmCid, farmInfo) in Buffer.toArray(_farmDataService.getLiveFarmBuffer()).vals()) {
             stakedTokenTVL := Float.add(stakedTokenTVL, farmInfo.stakedTokenTVL);
-            rewardTokenTVL := Float.add(rewardTokenTVL, farmInfo.rewardTokenTVL);
+            rewardTokenTV := Float.add(rewardTokenTV, farmInfo.rewardTokenTV);
         };
         return #ok({
             stakedTokenTVL = stakedTokenTVL;
-            rewardTokenTVL = rewardTokenTVL;
+            rewardTokenTV = rewardTokenTV;
         });
     };
 
