@@ -109,10 +109,11 @@ shared (initMsg) actor class FarmFeeReceiver() = this {
     }) : Bool {
         return switch (msg) {
             // Controller
-            case (#claim args) { Prim.isController(caller) };
-            case (#transfer args) { Prim.isController(caller) };
+            case (#claim args)          { Prim.isController(caller) };
+            case (#transfer args)       { Prim.isController(caller) };
+            case (#transferAll args)    { Prim.isController(caller) };
             // Anyone
-            case (_) { true };
+            case (_)                    { true };
         };
     };
 };

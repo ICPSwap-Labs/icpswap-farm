@@ -143,7 +143,7 @@ module {
     };
     public type TVL = {
         stakedTokenTVL : Float;
-        rewardTokenTVL : Float;
+        rewardTokenTV : Float;
     };
     public type SwapPositionInfo = {
         pool : Text;

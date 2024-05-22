@@ -19,8 +19,8 @@ let
       ,{ dependencies = [] : List Text
       , name = "token-adapter"
       , repo = "git@github.com:ICPSwap-Labs/icpswap-token-adapter.git"
-      , version = "v1.0.3"
-      }      
+      , version = "v1.0.7"
+      }
       ,{ dependencies = [] : List Text
       , name = "icpswap-v3-service"
       , repo = "git@github.com:ICPSwap-Labs/icpswap-v3-service.git"
