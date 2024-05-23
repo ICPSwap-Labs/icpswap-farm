@@ -16,6 +16,11 @@ shared (initMsg) actor class FarmControllerValidator(
     ICP : Types.Token,
 ) = this {
 
+    public type Result = {
+        #Ok : Text;
+        #Err : Text;
+    };
+
     private stable var _initCycles : Nat = 1860000000000;
 
     private stable var ONE_YEAR : Nat = 31557600;
@@ -28,44 +33,39 @@ shared (initMsg) actor class FarmControllerValidator(
 
     private var _farmControllerAct = actor (Principal.toText(farmControllerCid)) : Types.IFarmController;
 
-    public shared (msg) func setAdminsValidate(admins : [Principal]) : async Result.Result<Text, Text> {
-        assert (Principal.equal(msg.caller, governanceCid));
-        return #ok(debug_show (admins));
-    };
-
-    public shared (msg) func createValidate(args : Types.CreateFarmArgs) : async Result.Result<Text, Text> {
+    public shared (msg) func createValidate(args : Types.CreateFarmArgs) : async Result {
         assert (Principal.equal(msg.caller, governanceCid));
 
         var nowTime = _getTime();
         if (args.rewardAmount <= 0) {
-            return #err("Reward amount must be positive");
+            return #Err("Reward amount must be positive");
         };
         if (nowTime > args.startTime) {
-            return #err("Start time must be after current time");
+            return #Err("Start time must be after current time");
         };
         if (args.startTime >= args.endTime) {
-            return #err("Start time must be before end time");
+            return #Err("Start time must be before end time");
         };
         if ((SafeUint.Uint256(args.startTime).sub(SafeUint.Uint256(nowTime)).val()) > ONE_MONTH) {
-            return #err("Start time is too far from current time");
+            return #Err("Start time is too far from current time");
         };
         var duration = SafeUint.Uint256(args.endTime).sub(SafeUint.Uint256(args.startTime)).val();
         if (duration > ONE_YEAR) {
-            return #err("Incentive duration cannot be more than 1 year");
+            return #Err("Incentive duration cannot be more than 1 year");
         } else if (duration >= SIX_MONTH) {
             if (args.secondPerCycle < TWELVE_HOURS) {
-                return #err("The reward distribution cycle cannot be faster than 12 hours");
+                return #Err("The reward distribution cycle cannot be faster than 12 hours");
             };
         } else if (duration >= ONE_MONTH) {
             if (args.secondPerCycle < FOUR_HOURS) {
-                return #err("The reward distribution cycle cannot be faster than 4 hours");
+                return #Err("The reward distribution cycle cannot be faster than 4 hours");
             };
         } else if (duration >= ONE_WEEK) {
             if (args.secondPerCycle < THIRTY_MINUTES) {
-                return #err("The reward distribution cycle cannot be faster than 30 minutes");
+                return #Err("The reward distribution cycle cannot be faster than 30 minutes");
             };
         } else {
-            return #err("Incentive duration cannot be less than 1 week");
+            return #Err("Incentive duration cannot be less than 1 week");
         };
 
         // check reward token
@@ -78,29 +78,58 @@ shared (initMsg) actor class FarmControllerValidator(
                     (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address)) or
                     (Text.notEqual(ICP.address, poolMetadata.token0.address) and Text.notEqual(ICP.address, poolMetadata.token1.address))
                 ) {
-                    throw Error.reject("Illegal SwapPool of reward token");
+                    return #Err("Illegal SwapPool of reward token");
                 };
             };
             case (#err(code)) {
-                throw Error.reject("Illegal SwapPool of reward token: " # debug_show (code));
+                return #Err("Illegal SwapPool of reward token: " # debug_show (code));
             };
         };
 
         switch (await _farmControllerAct.getCycleInfo()) {
             case (#ok(cycleInfo)) {
                 if (cycleInfo.balance <= _initCycles or cycleInfo.available <= _initCycles) {
-                    throw Error.reject("Insufficient Cycle Balance.");
+                    return #Err("Insufficient Cycle Balance.");
                 };
             };
             case (#err(code)) {
-                throw Error.reject("Get cycle info of FarmController failed: " # debug_show (code));
+                return #Err("Get cycle info of FarmController failed: " # debug_show (code));
             };
         };
 
-        return #ok("args: " # debug_show (args));
+        return #Ok(debug_show (args));
+    };
+
+    public shared (msg) func setAdminsValidate(admins : [Principal]) : async Result {
+        assert (Principal.equal(msg.caller, governanceCid));
+        return #Ok(debug_show (admins));
+    };
+    
+    public shared ({ caller }) func setFarmAdminsValidate(farmCid : Principal, admins : [Principal]) : async Result {
+        assert (Principal.equal(caller, governanceCid));
+        if (not (await _checkFarm(farmCid))) {
+            return #Err(Principal.toText(farmCid) # " doesn't exist.");
+        };
+        return #Ok(debug_show (farmCid) # ", " # debug_show (admins));
     };
 
     private func _getTime() : Nat {
         return Nat64.toNat(Int64.toNat64(Int64.fromInt(Time.now() / 1000000000)));
+    };
+
+    private func _checkFarm(farmCid : Principal) : async Bool {
+        switch (await _farmControllerAct.getAllFarmId()) {
+            case (#ok(farms)) {
+                for (it in farms.vals()) {
+                    if (Principal.equal(farmCid, it)) {
+                        return true;
+                    };
+                };
+                return false;
+            };
+            case (#err(msg)) {
+                return false;
+            };
+        };
     };
 };

@@ -183,9 +183,11 @@ module {
         #getCycleInfo : () -> ();
         #getFarms : () -> ?FarmStatus;
         #getAllFarms : () -> ();
+        #getAllFarmId : () -> ();
         #getInitArgs : () -> ();
         #getGlobalTVL : () -> ();
         #setAdmins : () -> [Principal];
+        #setFarmAdmins : () -> (Principal, [Principal]);
         #getAdmins : () -> ();
         #setFee : () -> Nat;
         #getFee : () -> ();
@@ -233,12 +235,14 @@ module {
     public type IFarmController = actor {
         create : shared CreateFarmArgs -> async Result.Result<Text, Text>;
         setAdmins : shared [Principal] -> async ();
-        getAdmins : shared () -> async Result.Result<[Principal], Error>;
+        getAdmins : query () -> async Result.Result<[Principal], Error>;
         getCycleInfo : shared () -> async Result.Result<CycleInfo, Error>;
+        getAllFarmId : query () -> async Result.Result<[Principal], Error>;
     };
 
     public type IFarm = actor {
         init : shared () -> async ();
+        setAdmins : shared [Principal] -> async ();
         stake : shared Nat -> async Result.Result<Text, Error>;
         unstake : shared Nat -> async Result.Result<Text, Error>;
         getRewardInfo : query [Nat] -> async Result.Result<Nat, Error>;
