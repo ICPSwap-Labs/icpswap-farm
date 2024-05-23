@@ -132,7 +132,7 @@ module {
         userNumberOfStakes : Nat;
         status : FarmStatus;
         creator : Principal;
-        positionIds: [Nat];
+        positionIds : [Nat];
     };
     public type TransType = {
         #stake;
@@ -183,9 +183,11 @@ module {
         #getCycleInfo : () -> ();
         #getFarms : () -> ?FarmStatus;
         #getAllFarms : () -> ();
+        #getAllFarmId : () -> ();
         #getInitArgs : () -> ();
         #getGlobalTVL : () -> ();
         #setAdmins : () -> [Principal];
+        #setFarmAdmins : () -> (Principal, [Principal]);
         #getAdmins : () -> ();
         #setFee : () -> Nat;
         #getFee : () -> ();
@@ -230,14 +232,23 @@ module {
         #transferAll : () -> (Token, Principal);
     };
 
+    public type IFarmController = actor {
+        create : shared CreateFarmArgs -> async Result.Result<Text, Text>;
+        setAdmins : shared [Principal] -> async ();
+        getAdmins : query () -> async Result.Result<[Principal], Error>;
+        getCycleInfo : shared () -> async Result.Result<CycleInfo, Error>;
+        getAllFarmId : query () -> async Result.Result<[Principal], Error>;
+    };
+
     public type IFarm = actor {
         init : shared () -> async ();
+        setAdmins : shared [Principal] -> async ();
         stake : shared Nat -> async Result.Result<Text, Error>;
         unstake : shared Nat -> async Result.Result<Text, Error>;
         getRewardInfo : query [Nat] -> async Result.Result<Nat, Error>;
         getFarmInfo : query Text -> async Result.Result<FarmInfo, Error>;
         getDeposit : query Nat -> async Result.Result<Deposit, Error>;
         getTVL : query () -> async Result.Result<{ stakedTokenTVL : Float; rewardTokenTVL : Float }, Error>;
-        withdrawRewardFee : query () -> async Result.Result<Text, Error>
+        withdrawRewardFee : query () -> async Result.Result<Text, Error>;
     };
 };

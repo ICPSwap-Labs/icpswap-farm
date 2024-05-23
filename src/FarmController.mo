@@ -194,6 +194,10 @@ shared (initMsg) actor class FarmController(
         });
     };
 
+    public query func getAllFarmId() : async Result.Result<[Principal], Types.Error> {
+        return #ok(_farmDataService.getAllFarmId());
+    };
+
     public query func getInitArgs() : async Result.Result<{ ICP : Types.Token; feeReceiverCid : Principal; governanceCid : ?Principal }, Types.Error> {
         #ok({
             ICP = ICP;
@@ -245,6 +249,12 @@ shared (initMsg) actor class FarmController(
     public query func getAdmins() : async Result.Result<[Principal], Types.Error> {
         return #ok(_admins);
     };
+    public shared (msg) func setFarmAdmins(farmCid : Principal, admins : [Principal]) : async () {
+        _checkPermission(msg.caller);
+        var farmAct = actor (Principal.toText(farmCid)) : Types.IFarm;
+        await farmAct.setAdmins(admins);
+    };
+
     private func _checkAdminPermission(caller : Principal) {
         assert (_hasAdminPermission(caller));
     };
