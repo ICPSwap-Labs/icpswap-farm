@@ -113,6 +113,27 @@ shared (initMsg) actor class FarmControllerValidator(
         return #Ok(debug_show (farmCid) # ", " # debug_show (admins));
     };
 
+    public shared ({ caller }) func addFarmControllersValidate(farmCid : Principal, controllers : [Principal]) : async Result {
+        assert (Principal.equal(caller, governanceCid));
+        if (not (await _checkFarm(farmCid))) {
+            return #Err(Principal.toText(farmCid) # " doesn't exist.");
+        };
+        return #Ok(debug_show (farmCid) # ", " # debug_show (controllers));
+    };
+
+    public shared ({ caller }) func removeFarmControllersValidate(farmCid : Principal, controllers : [Principal]) : async Result {
+        assert (Principal.equal(caller, governanceCid));
+        if (not (await _checkFarm(farmCid))) {
+            return #Err(Principal.toText(farmCid) # " doesn't exist.");
+        };
+        for (it in controllers.vals()) {
+            if (Principal.equal(it, farmControllerCid)) {
+                return #Err("FarmController must be the controller of Farm.");
+            };
+        };
+        return #Ok(debug_show (farmCid) # ", " # debug_show (controllers));
+    };
+
     private func _getTime() : Nat {
         return Nat64.toNat(Int64.toNat64(Int64.fromInt(Time.now() / 1000000000)));
     };

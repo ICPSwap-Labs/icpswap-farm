@@ -30,7 +30,6 @@ shared (initMsg) actor class Farm(
 ) = this {
 
   private stable var _canisterId : ?Principal = null;
-  private stable var _ICPDecimals : Nat = 0;
 
   // reward meta
   private stable var _status : Types.FarmStatus = #NOT_STARTED;
@@ -43,9 +42,10 @@ shared (initMsg) actor class Farm(
   private stable var _totalRewardUnharvested = 0;
   private stable var _totalRewardFee = 0;
   private stable var _totalLiquidity = 0;
-  private stable var _TVL = {
-    var stakedTokenTVL : Float = 0;
-    var rewardTokenTV : Float = 0;
+  private stable var _TVL : Types.TVL = {
+    poolToken0 = { address = ""; standard = ""; amount = 0; };
+    poolToken1 = { address = ""; standard = ""; amount = 0; };
+    rewardToken = { address = initArgs.rewardToken.address; standard = initArgs.rewardToken.standard; amount = initArgs.totalReward; };
   };
 
   // position pool metadata
@@ -58,20 +58,16 @@ shared (initMsg) actor class Farm(
   private stable var _poolToken0Decimals : Nat = 0;
   private stable var _poolToken1Decimals : Nat = 0;
   private stable var _poolFee : Nat = 0;
-  private stable var _poolZeroForOne = false;
   private stable var _poolMetadata = {
     sqrtPriceX96 : Nat = 0;
     tick : Int = 0;
-    toICPPrice : Float = 0;
   };
 
   // reward pool metadata
   private stable var _rewardTokenDecimals : Nat = 0;
-  private stable var _rewardPoolZeroForOne = false;
   private stable var _rewardPoolMetadata = {
     sqrtPriceX96 : Nat = 0;
     tick : Int = 0;
-    toICPPrice : Float = 0;
   };
 
   // limit params
@@ -93,7 +89,6 @@ shared (initMsg) actor class Farm(
   private stable var _distributeRecordList : [Types.DistributeRecord] = [];
   private var _distributeRecordBuffer : Buffer.Buffer<Types.DistributeRecord> = Buffer.Buffer<Types.DistributeRecord>(0);
 
-  let _ICPAdapter = TokenFactory.getAdapter(initArgs.ICP.address, initArgs.ICP.standard);
   let _rewardTokenAdapter = TokenFactory.getAdapter(initArgs.rewardToken.address, initArgs.rewardToken.standard);
   private stable var _swapPoolAct = actor (Principal.toText(initArgs.pool)) : actor {
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
@@ -133,9 +128,6 @@ shared (initMsg) actor class Farm(
         };
       };
     };
-    _rewardPoolZeroForOne := if (Text.equal(initArgs.ICP.address, rewardPoolMetadata.token0.address)) {
-      false;
-    } else { true };
     let poolMetadata = switch (await _swapPoolAct.metadata()) {
       case (#ok(poolMetadata)) { poolMetadata };
       case (#err(code)) {
@@ -154,11 +146,7 @@ shared (initMsg) actor class Farm(
     _poolFee := poolMetadata.fee;
     _poolToken0 := poolMetadata.token0;
     _poolToken1 := poolMetadata.token1;
-    _poolZeroForOne := if (Text.equal(initArgs.ICP.address, _poolToken0.address)) {
-      false;
-    } else { true };
 
-    _ICPDecimals := Nat8.toNat(await _ICPAdapter.decimals());
     _rewardTokenDecimals := Nat8.toNat(await _rewardTokenAdapter.decimals());
     let poolToken0Adapter = TokenFactory.getAdapter(_poolToken0.address, _poolToken0.standard);
     let poolToken1Adapter = TokenFactory.getAdapter(_poolToken1.address, _poolToken1.standard);
@@ -169,21 +157,15 @@ shared (initMsg) actor class Farm(
     _rewardPoolMetadata := {
       sqrtPriceX96 = rewardPoolMetadata.sqrtPriceX96;
       tick = rewardPoolMetadata.tick;
-      toICPPrice = _computeToICPPrice(
-        if (_rewardPoolZeroForOne) { _rewardTokenDecimals } else {
-          _ICPDecimals;
-        },
-        if (_rewardPoolZeroForOne) { _ICPDecimals } else {
-          _rewardTokenDecimals;
-        },
-        rewardPoolMetadata.sqrtPriceX96,
-        _rewardPoolZeroForOne,
-      );
     };
     _poolMetadata := {
       sqrtPriceX96 = poolMetadata.sqrtPriceX96;
       tick = poolMetadata.tick;
-      toICPPrice = _computeToICPPrice(_poolToken0Decimals, _poolToken1Decimals, poolMetadata.sqrtPriceX96, _poolZeroForOne);
+    };
+    _TVL := {
+      poolToken0 = { address = _poolToken0.address; standard = _poolToken0.standard; amount = 0; };
+      poolToken1 = { address = _poolToken1.address; standard = _poolToken1.standard; amount = 0; };
+      rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
     };
 
     _inited := true;
@@ -359,26 +341,14 @@ shared (initMsg) actor class Farm(
   public shared (msg) func finishManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #FINISHED;
-    await _farmControllerAct.updateFarmInfo(
-      _status,
-      {
-        stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTV = _TVL.rewardTokenTV;
-      },
-    );
+    await _farmControllerAct.updateFarmInfo(_status, _TVL);
     return #ok("Finish farm successfully");
   };
 
   public shared (msg) func restartManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #LIVE;
-    await _farmControllerAct.updateFarmInfo(
-      _status,
-      {
-        stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTV = _TVL.rewardTokenTV;
-      },
-    );
+    await _farmControllerAct.updateFarmInfo(_status, _TVL);
     return #ok("Restart farm successfully");
   };
 
@@ -452,8 +422,9 @@ shared (initMsg) actor class Farm(
             await _farmControllerAct.updateFarmInfo(
               #CLOSED,
               {
-                stakedTokenTVL = 0;
-                rewardTokenTV = 0;
+                poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
+                poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
+                rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
               },
             );
             _stakeRecordBuffer.add({
@@ -467,8 +438,11 @@ shared (initMsg) actor class Farm(
             });
             _totalRewardBalance := 0;
             _status := #CLOSED;
-            _TVL.stakedTokenTVL := 0;
-            _TVL.rewardTokenTV := 0;
+            _TVL := {
+              poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
+              poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
+              rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
+            };
           };
           case (#Err(code)) {
             _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ".");
@@ -481,14 +455,18 @@ shared (initMsg) actor class Farm(
       await _farmControllerAct.updateFarmInfo(
         #CLOSED,
         {
-          stakedTokenTVL = 0;
-          rewardTokenTV = 0;
+          poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
+          poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
+          rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
         },
       );
       _totalRewardBalance := 0;
       _status := #CLOSED;
-      _TVL.stakedTokenTVL := 0;
-      _TVL.rewardTokenTV := 0;
+      _TVL := {
+        poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
+        poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
+        rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
+      };
     };
 
     return #ok("Close successfully");
@@ -566,7 +544,7 @@ shared (initMsg) actor class Farm(
     };
   };
 
-  public query func getUserTVL(owner : Principal) : async Result.Result<Float, Types.Error> {
+  public query func getUserTVL(owner : Principal) : async Result.Result<{ poolToken0 : Types.TokenAmount; poolToken1 : Types.TokenAmount; }, Types.Error> {
     switch (_userPositionMap.get(owner)) {
       case (?list) {
         var poolToken0Amount : Int = 0;
@@ -581,27 +559,19 @@ shared (initMsg) actor class Farm(
           };
         };
         return #ok(
-          if (_poolZeroForOne) {
-            Float.add(
-              Float.mul(
-                Float.div(Float.fromInt(poolToken0Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken0Decimals).val())),
-                _poolMetadata.toICPPrice,
-              ),
-              Float.div(Float.fromInt(poolToken1Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken1Decimals).val())),
-            );
-          } else {
-            Float.add(
-              Float.mul(
-                Float.div(Float.fromInt(poolToken1Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken1Decimals).val())),
-                _poolMetadata.toICPPrice,
-              ),
-              Float.div(Float.fromInt(poolToken0Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken0Decimals).val())),
-            );
+          {
+            poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = IntUtils.toNat(poolToken0Amount, 512); };
+            poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = IntUtils.toNat(poolToken1Amount, 512); };
           }
         );
       };
       case (_) {
-        return #ok(0);
+        return #ok(
+          {
+            poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
+            poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
+          }
+        );
       };
     };
   };
@@ -629,11 +599,8 @@ shared (initMsg) actor class Farm(
     };
   };
 
-  public query func getTVL() : async Result.Result<{ stakedTokenTVL : Float; rewardTokenTV : Float }, Types.Error> {
-    return #ok({
-      stakedTokenTVL = _TVL.stakedTokenTVL;
-      rewardTokenTV = _TVL.rewardTokenTV;
-    });
+  public query func getTVL() : async Result.Result<Types.TVL, Types.Error> {
+    return #ok(_TVL);
   };
 
   public query func getInitArgs() : async Result.Result<Types.InitFarmArgs, Types.Error> {
@@ -674,28 +641,20 @@ shared (initMsg) actor class Farm(
     poolMetadata : {
       sqrtPriceX96 : Nat;
       tick : Int;
-      toICPPrice : Float;
-      zeroForOne : Bool;
     };
     rewardPoolMetadata : {
       sqrtPriceX96 : Nat;
       tick : Int;
-      toICPPrice : Float;
-      zeroForOne : Bool;
     };
   } {
     return {
       poolMetadata = {
         sqrtPriceX96 = _poolMetadata.sqrtPriceX96;
         tick = _poolMetadata.tick;
-        toICPPrice = _poolMetadata.toICPPrice;
-        zeroForOne = _poolZeroForOne;
       };
       rewardPoolMetadata = {
         sqrtPriceX96 = _rewardPoolMetadata.sqrtPriceX96;
         tick = _rewardPoolMetadata.tick;
-        toICPPrice = _rewardPoolMetadata.toICPPrice;
-        zeroForOne = _rewardPoolZeroForOne;
       };
     };
   };
@@ -817,13 +776,7 @@ shared (initMsg) actor class Farm(
     if (_status == #FINISHED and (_totalRewardBalance == 0 and _positionIds.size() == 0)) {
       _status := #CLOSED;
     };
-    await _farmControllerAct.updateFarmInfo(
-      _status,
-      {
-        stakedTokenTVL = _TVL.stakedTokenTVL;
-        rewardTokenTV = _TVL.rewardTokenTV;
-      },
-    );
+    await _farmControllerAct.updateFarmInfo(_status, _TVL);
   };
 
   private func _syncPoolMeta() : async () {
@@ -839,21 +792,10 @@ shared (initMsg) actor class Farm(
       _rewardPoolMetadata := {
         sqrtPriceX96 = rewardPoolMetadata.sqrtPriceX96;
         tick = rewardPoolMetadata.tick;
-        toICPPrice = _computeToICPPrice(
-          if (_rewardPoolZeroForOne) { _rewardTokenDecimals } else {
-            _ICPDecimals;
-          },
-          if (_rewardPoolZeroForOne) { _ICPDecimals } else {
-            _rewardTokenDecimals;
-          },
-          rewardPoolMetadata.sqrtPriceX96,
-          _rewardPoolZeroForOne,
-        );
       };
       _poolMetadata := {
         sqrtPriceX96 = poolMetadata.sqrtPriceX96;
         tick = poolMetadata.tick;
-        toICPPrice = _computeToICPPrice(_poolToken0Decimals, _poolToken1Decimals, poolMetadata.sqrtPriceX96, _poolZeroForOne);
       };
     } catch (e) {
       _errorLogBuffer.add("_syncPoolMeta failed " # debug_show (Error.message(e)) # " . nowTime: " # debug_show (_getTime()));
@@ -949,37 +891,13 @@ shared (initMsg) actor class Farm(
       _poolToken0Amount := IntUtils.toNat(poolToken0Amount, 512);
       _poolToken1Amount := IntUtils.toNat(poolToken1Amount, 512);
       // update TVL
-      _updateTVL();
+      _TVL := {
+        poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = _poolToken0Amount; };
+        poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = _poolToken1Amount; };
+        rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
+      };
     } catch (e) {
       _errorLogBuffer.add("_distributeReward failed " # debug_show (Error.message(e)) # " . nowTime: " # debug_show (_getTime()));
-    };
-  };
-
-  private func _updateTVL() {
-    _TVL.stakedTokenTVL := if (_poolZeroForOne) {
-      Float.add(
-        Float.mul(
-          Float.div(Float.fromInt(_poolToken0Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken0Decimals).val())),
-          _poolMetadata.toICPPrice,
-        ),
-        Float.div(Float.fromInt(_poolToken1Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken1Decimals).val())),
-      );
-    } else {
-      Float.add(
-        Float.mul(
-          Float.div(Float.fromInt(_poolToken1Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken1Decimals).val())),
-          _poolMetadata.toICPPrice,
-        ),
-        Float.div(Float.fromInt(_poolToken0Amount), Float.fromInt(SafeInt.Int256(10 ** _poolToken0Decimals).val())),
-      );
-    };
-    _TVL.rewardTokenTV := if (Text.equal(initArgs.ICP.address, initArgs.rewardToken.address)) {
-      Float.div(Float.fromInt(_totalReward), Float.fromInt(SafeInt.Int256(10 ** _rewardTokenDecimals).val()));
-    } else {
-      Float.mul(
-        Float.div(Float.fromInt(_totalReward), Float.fromInt(SafeInt.Int256(10 ** _rewardTokenDecimals).val())),
-        _rewardPoolMetadata.toICPPrice,
-      );
     };
   };
 
@@ -1151,17 +1069,17 @@ shared (initMsg) actor class Farm(
   }) : Bool {
     return switch (msg) {
       // Controller
-      case (#init args) { _hasPermission(caller) };
-      case (#setAdmins args) { _hasPermission(caller) };
+      case (#init args)               { _hasPermission(caller) };
+      case (#setAdmins args)          { _hasPermission(caller) };
       // Admin
-      case (#finishManually args) { _hasAdminPermission(caller) };
-      case (#restartManually args) { _hasAdminPermission(caller) };
-      case (#close args) { _hasAdminPermission(caller) };
-      case (#clearErrorLog args) { _hasAdminPermission(caller) };
-      case (#setLimitInfo args) { _hasAdminPermission(caller) };
-      case (#withdrawRewardFee args) { Principal.equal(caller, initArgs.feeReceiverCid) };
+      case (#finishManually args)     { _hasAdminPermission(caller) };
+      case (#restartManually args)    { _hasAdminPermission(caller) };
+      case (#close args)              { _hasAdminPermission(caller) };
+      case (#clearErrorLog args)      { _hasAdminPermission(caller) };
+      case (#setLimitInfo args)       { _hasAdminPermission(caller) };
+      case (#withdrawRewardFee args)  { Principal.equal(caller, initArgs.feeReceiverCid); };
       // Anyone
-      case (_) { true };
+      case (_)                        { true };
     };
   };
 

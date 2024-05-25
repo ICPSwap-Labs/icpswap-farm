@@ -25,7 +25,6 @@ import Prim "mo:⛔";
 import FarmDataService "./components/FarmData";
 
 shared (initMsg) actor class FarmController(
-    ICP : Types.Token,
     feeReceiverCid : Principal,
     governanceCid : ?Principal,
 ) = this {
@@ -39,6 +38,11 @@ shared (initMsg) actor class FarmController(
     private stable var TWELVE_HOURS : Nat = 43200;
     private stable var FOUR_HOURS : Nat = 14400;
     private stable var THIRTY_MINUTES : Nat = 1800;
+
+    private let IC0 = actor "aaaaa-aa" : actor {
+        canister_status : { canister_id : Principal } -> async { settings : { controllers : [Principal] }; };
+        update_settings : { canister_id : Principal; settings : { controllers : [Principal]; } } -> ();
+    };
 
     // the fee that is taken from every unstake that is executed on the farm in 1 per thousand
     private stable var _fee : Nat = 50;
@@ -97,10 +101,7 @@ shared (initMsg) actor class FarmController(
             };
             let rewardPoolMetadata = switch (await rewardPoolAct.metadata()) {
                 case (#ok(poolMetadata)) {
-                    if (
-                        (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address)) or
-                        (Text.notEqual(ICP.address, poolMetadata.token0.address) and Text.notEqual(ICP.address, poolMetadata.token1.address))
-                    ) {
+                    if (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address)) {
                         throw Error.reject("Illegal SwapPool of reward token");
                     };
                 };
@@ -108,9 +109,16 @@ shared (initMsg) actor class FarmController(
                     throw Error.reject("Illegal SwapPool of reward token: " # debug_show (code));
                 };
             };
+            let positionPoolAct = actor (Principal.toText(args.pool)) : actor {
+                metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
+            };
+            let positionPoolMetadata = switch (await positionPoolAct.metadata()) {
+                case (#ok(poolMetadata)) { poolMetadata; };
+                case (#err(code)) { throw Error.reject("Illegal position SwapPool: " # debug_show (code)); };
+            };
 
             Cycles.add(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ ICP = ICP; rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; }));
+            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
@@ -118,8 +126,9 @@ shared (initMsg) actor class FarmController(
             _farmDataService.putNotStartedFarm(
                 farm,
                 {
-                    stakedTokenTVL = 0;
-                    rewardTokenTV = 0;
+                    poolToken0 = { address = positionPoolMetadata.token0.address; standard = positionPoolMetadata.token0.standard; amount = 0; };
+                    poolToken1 = { address = positionPoolMetadata.token1.address; standard = positionPoolMetadata.token1.standard; amount = 0; };
+                    rewardToken = { address = args.rewardToken.address; standard = args.rewardToken.standard; amount = args.rewardAmount; };
                 },
             );
 
@@ -198,24 +207,10 @@ shared (initMsg) actor class FarmController(
         return #ok(_farmDataService.getAllFarmId());
     };
 
-    public query func getInitArgs() : async Result.Result<{ ICP : Types.Token; feeReceiverCid : Principal; governanceCid : ?Principal }, Types.Error> {
+    public query func getInitArgs() : async Result.Result<{ feeReceiverCid : Principal; governanceCid : ?Principal }, Types.Error> {
         #ok({
-            ICP = ICP;
             feeReceiverCid = feeReceiverCid;
             governanceCid = governanceCid;
-        });
-    };
-
-    public query func getGlobalTVL() : async Result.Result<Types.TVL, Types.Error> {
-        var stakedTokenTVL : Float = 0;
-        var rewardTokenTV : Float = 0;
-        for ((farmCid, farmInfo) in Buffer.toArray(_farmDataService.getLiveFarmBuffer()).vals()) {
-            stakedTokenTVL := Float.add(stakedTokenTVL, farmInfo.stakedTokenTVL);
-            rewardTokenTV := Float.add(rewardTokenTV, farmInfo.rewardTokenTV);
-        };
-        return #ok({
-            stakedTokenTVL = stakedTokenTVL;
-            rewardTokenTV = rewardTokenTV;
         });
     };
 
@@ -255,6 +250,38 @@ shared (initMsg) actor class FarmController(
         await farmAct.setAdmins(admins);
     };
 
+    public shared (msg) func addFarmControllers(farmCid : Principal, controllers : [Principal]) : async () {
+        _checkPermission(msg.caller);
+        let { settings } = await IC0.canister_status({ canister_id = farmCid });
+        var controllerList = List.append(List.fromArray(settings.controllers), List.fromArray(controllers));
+        IC0.update_settings({ canister_id = farmCid; settings = { controllers = List.toArray(controllerList) }; });
+    };
+
+    public shared (msg) func removeFarmControllers(farmCid : Principal, controllers : [Principal]) : async () {
+        _checkPermission(msg.caller);
+        if (not _checkFarmControllers(controllers)){
+            throw Error.reject("FarmController must be the controller of Farm.");
+        };
+        let { settings } = await IC0.canister_status({ canister_id = farmCid });
+        let buffer: Buffer.Buffer<Principal> = Buffer.Buffer<Principal>(0);
+        for (it in settings.controllers.vals()) {
+            if (not CollectionUtils.arrayContains<Principal>(controllers, it, Principal.equal)) {
+                buffer.add(it);
+            };
+        };
+        IC0.update_settings({ canister_id = farmCid; settings = { controllers = Buffer.toArray<Principal>(buffer) }; });
+    };
+
+    private func _checkFarmControllers(controllers : [Principal]) : Bool {
+        let controllerCid : Principal = Principal.fromActor(this);
+        for (it in controllers.vals()) {
+            if (Principal.equal(it, controllerCid)) {
+                return false;
+            };
+        };
+        true;
+    };
+
     private func _checkAdminPermission(caller : Principal) {
         assert (_hasAdminPermission(caller));
     };
@@ -288,12 +315,15 @@ shared (initMsg) actor class FarmController(
     }) : Bool {
         return switch (msg) {
             // Controller
-            case (#setAdmins args) { _hasPermission(caller) };
+            case (#setAdmins args)              { _hasPermission(caller) };
+            case (#addFarmControllers args)     { _hasPermission(caller) };
+            case (#removeFarmControllers args)  { _hasPermission(caller) };
+            case (#setFarmAdmins args)          { _hasPermission(caller) };
             // Admin
-            case (#create args) { _hasAdminPermission(caller) };
-            case (#setFee args) { _hasAdminPermission(caller) };
+            case (#create args)                 { _hasAdminPermission(caller) };
+            case (#setFee args)                 { _hasAdminPermission(caller) };
             // Anyone
-            case (_) { true };
+            case (_)                            { true };
         };
     };
 
