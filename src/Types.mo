@@ -59,7 +59,6 @@ module {
         refunder : Principal;
     };
     public type InitFarmArgs = {
-        ICP : Token;
         rewardToken : Token;
         pool : Principal;
         rewardPool : Principal;
@@ -141,9 +140,15 @@ module {
         #distribute;
         #withdraw;
     };
+    public type TokenAmount = {
+        address : Text;
+        standard : Text;
+        amount : Nat;
+    };
     public type TVL = {
-        stakedTokenTVL : Float;
-        rewardTokenTV : Float;
+        poolToken0 : TokenAmount;
+        poolToken1 : TokenAmount;
+        rewardToken : TokenAmount;
     };
     public type SwapPositionInfo = {
         pool : Text;
@@ -185,7 +190,6 @@ module {
         #getAllFarms : () -> ();
         #getAllFarmId : () -> ();
         #getInitArgs : () -> ();
-        #getGlobalTVL : () -> ();
         #setAdmins : () -> [Principal];
         #setFarmAdmins : () -> (Principal, [Principal]);
         #getAdmins : () -> ();

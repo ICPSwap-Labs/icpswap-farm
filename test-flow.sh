@@ -116,7 +116,7 @@ dfx canister install PasscodeManager --argument="(principal \"$(dfx canister id 
 echo "==> install FarmFeeReceiver"
 dfx canister install FarmFeeReceiver
 echo "==> install FarmController"
-dfx canister install FarmController --argument="(record {address = \"$(dfx canister id ICRC2)\"; standard = \"ICRC2\";}, principal \"$(dfx canister id FarmFeeReceiver)\", null)"
+dfx canister install FarmController --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null)"
 
 dipAId=`dfx canister id DIP20A`
 dipBId=`dfx canister id DIP20B`
