@@ -59,7 +59,6 @@ module {
         refunder : Principal;
     };
     public type InitFarmArgs = {
-        ICP : Token;
         rewardToken : Token;
         pool : Principal;
         rewardPool : Principal;
@@ -141,9 +140,15 @@ module {
         #distribute;
         #withdraw;
     };
+    public type TokenAmount = {
+        address : Text;
+        standard : Text;
+        amount : Nat;
+    };
     public type TVL = {
-        stakedTokenTVL : Float;
-        rewardTokenTV : Float;
+        poolToken0 : TokenAmount;
+        poolToken1 : TokenAmount;
+        rewardToken : TokenAmount;
     };
     public type SwapPositionInfo = {
         pool : Text;
@@ -178,20 +183,21 @@ module {
         time : Time.Time;
     };
     public type FarmControllerMsg = {
-        #create : () -> (CreateFarmArgs);
-        #updateFarmInfo : () -> (FarmStatus, TVL);
+        #addFarmControllers : () -> (Principal, [Principal]);
+        #create : () -> CreateFarmArgs;
+        #getAdmins : () -> ();
+        #getAllFarmId : () -> ();
+        #getAllFarms : () -> ();
         #getCycleInfo : () -> ();
         #getFarms : () -> ?FarmStatus;
-        #getAllFarms : () -> ();
-        #getAllFarmId : () -> ();
+        #getFee : () -> ();
         #getInitArgs : () -> ();
-        #getGlobalTVL : () -> ();
+        #getVersion : () -> ();
+        #removeFarmControllers : () -> (Principal, [Principal]);
         #setAdmins : () -> [Principal];
         #setFarmAdmins : () -> (Principal, [Principal]);
-        #getAdmins : () -> ();
         #setFee : () -> Nat;
-        #getFee : () -> ();
-        #getVersion : () -> ();
+        #updateFarmInfo : () -> (FarmStatus, TVL)
     };
     public type FarmMsg = {
         #clearErrorLog : () -> ();
