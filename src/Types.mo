@@ -183,19 +183,21 @@ module {
         time : Time.Time;
     };
     public type FarmControllerMsg = {
-        #create : () -> (CreateFarmArgs);
-        #updateFarmInfo : () -> (FarmStatus, TVL);
+        #addFarmControllers : () -> (Principal, [Principal]);
+        #create : () -> CreateFarmArgs;
+        #getAdmins : () -> ();
+        #getAllFarmId : () -> ();
+        #getAllFarms : () -> ();
         #getCycleInfo : () -> ();
         #getFarms : () -> ?FarmStatus;
-        #getAllFarms : () -> ();
-        #getAllFarmId : () -> ();
+        #getFee : () -> ();
         #getInitArgs : () -> ();
+        #getVersion : () -> ();
+        #removeFarmControllers : () -> (Principal, [Principal]);
         #setAdmins : () -> [Principal];
         #setFarmAdmins : () -> (Principal, [Principal]);
-        #getAdmins : () -> ();
         #setFee : () -> Nat;
-        #getFee : () -> ();
-        #getVersion : () -> ();
+        #updateFarmInfo : () -> (FarmStatus, TVL)
     };
     public type FarmMsg = {
         #clearErrorLog : () -> ();

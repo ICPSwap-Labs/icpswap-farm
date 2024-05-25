@@ -39,6 +39,11 @@ shared (initMsg) actor class FarmController(
     private stable var FOUR_HOURS : Nat = 14400;
     private stable var THIRTY_MINUTES : Nat = 1800;
 
+    private let IC0 = actor "aaaaa-aa" : actor {
+        canister_status : { canister_id : Principal } -> async { settings : { controllers : [Principal] }; };
+        update_settings : { canister_id : Principal; settings : { controllers : [Principal]; } } -> ();
+    };
+
     // the fee that is taken from every unstake that is executed on the farm in 1 per thousand
     private stable var _fee : Nat = 50;
 
@@ -109,7 +114,7 @@ shared (initMsg) actor class FarmController(
             };
             let positionPoolMetadata = switch (await positionPoolAct.metadata()) {
                 case (#ok(poolMetadata)) { poolMetadata; };
-                case (#err(code)) { throw Error.reject("Illegal SwapPool of position: " # debug_show (code)); };
+                case (#err(code)) { throw Error.reject("Illegal position SwapPool: " # debug_show (code)); };
             };
 
             Cycles.add(_initCycles);
@@ -245,6 +250,38 @@ shared (initMsg) actor class FarmController(
         await farmAct.setAdmins(admins);
     };
 
+    public shared (msg) func addFarmControllers(farmCid : Principal, controllers : [Principal]) : async () {
+        _checkPermission(msg.caller);
+        let { settings } = await IC0.canister_status({ canister_id = farmCid });
+        var controllerList = List.append(List.fromArray(settings.controllers), List.fromArray(controllers));
+        IC0.update_settings({ canister_id = farmCid; settings = { controllers = List.toArray(controllerList) }; });
+    };
+
+    public shared (msg) func removeFarmControllers(farmCid : Principal, controllers : [Principal]) : async () {
+        _checkPermission(msg.caller);
+        if (not _checkFarmControllers(controllers)){
+            throw Error.reject("FarmController must be the controller of Farm.");
+        };
+        let { settings } = await IC0.canister_status({ canister_id = farmCid });
+        let buffer: Buffer.Buffer<Principal> = Buffer.Buffer<Principal>(0);
+        for (it in settings.controllers.vals()) {
+            if (not CollectionUtils.arrayContains<Principal>(controllers, it, Principal.equal)) {
+                buffer.add(it);
+            };
+        };
+        IC0.update_settings({ canister_id = farmCid; settings = { controllers = Buffer.toArray<Principal>(buffer) }; });
+    };
+
+    private func _checkFarmControllers(controllers : [Principal]) : Bool {
+        let controllerCid : Principal = Principal.fromActor(this);
+        for (it in controllers.vals()) {
+            if (Principal.equal(it, controllerCid)) {
+                return false;
+            };
+        };
+        true;
+    };
+
     private func _checkAdminPermission(caller : Principal) {
         assert (_hasAdminPermission(caller));
     };
@@ -278,12 +315,15 @@ shared (initMsg) actor class FarmController(
     }) : Bool {
         return switch (msg) {
             // Controller
-            case (#setAdmins args)  { _hasPermission(caller) };
+            case (#setAdmins args)              { _hasPermission(caller) };
+            case (#addFarmControllers args)     { _hasPermission(caller) };
+            case (#removeFarmControllers args)  { _hasPermission(caller) };
+            case (#setFarmAdmins args)          { _hasPermission(caller) };
             // Admin
-            case (#create args)     { _hasAdminPermission(caller) };
-            case (#setFee args)     { _hasAdminPermission(caller) };
+            case (#create args)                 { _hasAdminPermission(caller) };
+            case (#setFee args)                 { _hasAdminPermission(caller) };
             // Anyone
-            case (_)                { true };
+            case (_)                            { true };
         };
     };
 
