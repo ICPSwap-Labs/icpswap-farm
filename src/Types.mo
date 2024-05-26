@@ -59,7 +59,6 @@ module {
         refunder : Principal;
     };
     public type InitFarmArgs = {
-        ICP : Token;
         rewardToken : Token;
         pool : Principal;
         rewardPool : Principal;
@@ -132,7 +131,7 @@ module {
         userNumberOfStakes : Nat;
         status : FarmStatus;
         creator : Principal;
-        positionIds: [Nat];
+        positionIds : [Nat];
     };
     public type TransType = {
         #stake;
@@ -141,9 +140,15 @@ module {
         #distribute;
         #withdraw;
     };
+    public type TokenAmount = {
+        address : Text;
+        standard : Text;
+        amount : Nat;
+    };
     public type TVL = {
-        stakedTokenTVL : Float;
-        rewardTokenTV : Float;
+        poolToken0 : TokenAmount;
+        poolToken1 : TokenAmount;
+        rewardToken : TokenAmount;
     };
     public type SwapPositionInfo = {
         pool : Text;
@@ -178,18 +183,21 @@ module {
         time : Time.Time;
     };
     public type FarmControllerMsg = {
-        #create : () -> (CreateFarmArgs);
-        #updateFarmInfo : () -> (FarmStatus, TVL);
+        #addFarmControllers : () -> (Principal, [Principal]);
+        #create : () -> CreateFarmArgs;
+        #getAdmins : () -> ();
+        #getAllFarmId : () -> ();
+        #getAllFarms : () -> ();
         #getCycleInfo : () -> ();
         #getFarms : () -> ?FarmStatus;
-        #getAllFarms : () -> ();
-        #getInitArgs : () -> ();
-        #getGlobalTVL : () -> ();
-        #setAdmins : () -> [Principal];
-        #getAdmins : () -> ();
-        #setFee : () -> Nat;
         #getFee : () -> ();
+        #getInitArgs : () -> ();
         #getVersion : () -> ();
+        #removeFarmControllers : () -> (Principal, [Principal]);
+        #setAdmins : () -> [Principal];
+        #setFarmAdmins : () -> (Principal, [Principal]);
+        #setFee : () -> Nat;
+        #updateFarmInfo : () -> (FarmStatus, TVL)
     };
     public type FarmMsg = {
         #clearErrorLog : () -> ();
@@ -230,14 +238,23 @@ module {
         #transferAll : () -> (Token, Principal);
     };
 
+    public type IFarmController = actor {
+        create : shared CreateFarmArgs -> async Result.Result<Text, Text>;
+        setAdmins : shared [Principal] -> async ();
+        getAdmins : query () -> async Result.Result<[Principal], Error>;
+        getCycleInfo : shared () -> async Result.Result<CycleInfo, Error>;
+        getAllFarmId : query () -> async Result.Result<[Principal], Error>;
+    };
+
     public type IFarm = actor {
         init : shared () -> async ();
+        setAdmins : shared [Principal] -> async ();
         stake : shared Nat -> async Result.Result<Text, Error>;
         unstake : shared Nat -> async Result.Result<Text, Error>;
         getRewardInfo : query [Nat] -> async Result.Result<Nat, Error>;
         getFarmInfo : query Text -> async Result.Result<FarmInfo, Error>;
         getDeposit : query Nat -> async Result.Result<Deposit, Error>;
         getTVL : query () -> async Result.Result<{ stakedTokenTVL : Float; rewardTokenTVL : Float }, Error>;
-        withdrawRewardFee : query () -> async Result.Result<Text, Error>
+        withdrawRewardFee : query () -> async Result.Result<Text, Error>;
     };
 };
