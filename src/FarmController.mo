@@ -74,11 +74,11 @@ shared (initMsg) actor class FarmController(
         var duration = SafeUint.Uint256(args.endTime).sub(SafeUint.Uint256(args.startTime)).val();
         if (duration > ONE_YEAR) {
             return #err("Incentive duration cannot be more than 1 year");
-        } else if (duration >= SIX_MONTH) {
+        } else if (duration > SIX_MONTH) {
             if (args.secondPerCycle < TWELVE_HOURS) {
                 return #err("The reward distribution cycle cannot be faster than 12 hours");
             };
-        } else if (duration >= ONE_MONTH) {
+        } else if (duration > ONE_MONTH) {
             if (args.secondPerCycle < FOUR_HOURS) {
                 return #err("The reward distribution cycle cannot be faster than 4 hours");
             };
