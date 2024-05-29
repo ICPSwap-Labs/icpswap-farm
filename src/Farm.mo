@@ -376,6 +376,7 @@ shared (initMsg) actor class Farm(
           ignore _rewardTokenHolderService.withdraw(principal, balance);
         };
         var passedIndexList : Buffer.Buffer<Nat> = Buffer.Buffer<Nat>(0);
+        var passedBalanceList : Buffer.Buffer<(Principal, Nat)> = Buffer.Buffer<(Principal, Nat)>(0);
         var failedIndexList : Buffer.Buffer<(Nat, Text)> = Buffer.Buffer<(Nat, Text)>(0);
         for ((principal, preTransIndex) in preTransIndexList.vals()) {
           try {
@@ -389,6 +390,7 @@ shared (initMsg) actor class Farm(
               created_at_time = null 
             })) {
               case (#Ok(index)) {
+                passedBalanceList.add(principal, balance);
                 passedIndexList.add(preTransIndex);
               };
               case (#Err(msg)) {
@@ -402,12 +404,15 @@ shared (initMsg) actor class Farm(
         for (preTransIndex in passedIndexList.vals()) {
           _postTransferComplete(preTransIndex);
         };
+        for ((principal, balance) in passedBalanceList.vals()) {
+          ignore _rewardTokenHolderService.withdraw(principal, balance);
+        };
         for ((preTransIndex, msg) in failedIndexList.vals()) {
           _postTransferError(preTransIndex, msg);
         };
+        return #ok("Send reward successfully");
       };
     };
-    return #ok("Send reward successfully");
   };
   
   public shared(msg) func removeErrorTransferLog(index: Nat, rollback: Bool) : async () {
