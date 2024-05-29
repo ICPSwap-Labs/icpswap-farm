@@ -399,15 +399,7 @@ function test()
     echo "==> 7 stake"
     stake 2
 
-    echo "==> 8 swap"
-    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    swap $token1 900934100000000 900934100000000 2274000482681 0 887271 1461446703485210103287273052203988822378723970341 999999999699999993 999398897657090959
-
-    echo "==> 9 swap"
-    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
-    swap $token0 10000000000 10000000000 78411589305243 5935257942037 89098 6815937996742481301561907102830 999999989699999993 999485150405326727
-
-    # sleep 120
+    sleep 120
 
     unstake 1 &
 
@@ -418,7 +410,7 @@ function test()
     echo "==> withdraw reward fee"
     withdraw_reward_fee
 
-    sleep 400
+    sleep 4000
 
     echo "==> close farm"
     close_farm
