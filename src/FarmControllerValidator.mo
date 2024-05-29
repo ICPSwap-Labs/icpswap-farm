@@ -130,6 +130,16 @@ shared (initMsg) actor class FarmControllerValidator(
         return #Ok(debug_show (farmCid) # ", " # debug_show (controllers));
     };
 
+    public query func getInitArgs() : async Result.Result<{
+        farmControllerCid : Principal;
+        governanceCid : Principal;
+    }, Types.Error> {
+        #ok({
+            farmControllerCid = farmControllerCid;
+            governanceCid = governanceCid;
+        });
+    };
+
     private func _getTime() : Nat {
         return Nat64.toNat(Int64.toNat64(Int64.fromInt(Time.now() / 1000000000)));
     };
