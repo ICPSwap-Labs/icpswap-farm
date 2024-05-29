@@ -18,6 +18,12 @@ module {
     public func hash(x : Nat) : Hash.Hash {
         return Prim.natToNat32(x);
     };
+    public func tokenEqual(t1 : Token, t2 : Token) : Bool {
+        return Text.equal(t1.address, t2.address) and Text.equal(t1.standard, t2.standard);
+    };
+    public func tokenHash(t : Token) : Hash.Hash {
+        return Text.hash(t.address # t.standard);
+    };
 
     public type FarmStatus = {
         #NOT_STARTED;
@@ -39,11 +45,9 @@ module {
         address : Text;
         standard : Text;
     };
-    public type SwapArgs = {
-        operator : Principal;
-        zeroForOne : Bool;
-        amountIn : Text;
-        amountOutMinimum : Text;
+     public type TokenBalance = {
+        token : Token;
+        balance : Nat;
     };
     public type CreateFarmArgs = {
         rewardToken : Token;
@@ -182,6 +186,21 @@ module {
         locked : Bool;
         time : Time.Time;
     };
+    public type TransferLog = {
+        index: Nat;
+        owner: Principal;
+        from: Principal;
+        fromSubaccount: ?Blob;
+        to: Principal;
+        action: Text;  // deposit, withdraw
+        amount: Nat;
+        fee: Nat;
+        token: Token;
+        result: Text;  // processing, success, error
+        errorMsg: Text;
+        daysFrom19700101: Nat;
+        timestamp: Nat;
+    };
     public type FarmControllerMsg = {
         #addFarmControllers : () -> (Principal, [Principal]);
         #create : () -> CreateFarmArgs;
@@ -220,14 +239,19 @@ module {
         #getStakeRecord : () -> (Nat, Nat, Text);
         #getTVL : () -> ();
         #getUserDeposits : () -> Principal;
+        #getUserRewardBalance : () -> Principal;
+        #getUserRewardBalances : () -> (Nat, Nat);
         #getUserTVL : () -> Principal;
         #getVersion : () -> ();
         #init : () -> ();
+        #removeErrorTransferLog : () -> (Nat, Bool);
         #restartManually : () -> ();
+        #sendRewardManually : () -> ();
         #setAdmins : () -> [Principal];
         #setLimitInfo : () -> (Nat, Nat, Nat, Bool);
         #stake : () -> Nat;
         #unstake : () -> Nat;
+        #withdraw : () -> ();
         #withdrawRewardFee : () -> ();
     };
     public type FarmFeeReceiver = {
