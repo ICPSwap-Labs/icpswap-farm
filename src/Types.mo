@@ -110,6 +110,7 @@ module {
         owner : Principal;
         holder : Principal;
         initTime : Nat;
+        lastDistributeTime : Nat;
         positionId : Nat;
         tickLower : Int;
         tickUpper : Int;
