@@ -1184,7 +1184,7 @@ shared (initMsg) actor class Farm(
     _updateRewardTokenFee,
   );
   // --------------------------- Version Control ------------------------------------
-  private var _version : Text = "3.0.3";
+  private var _version : Text = "3.1.0";
   public query func getVersion() : async Text { _version };
 
   // --------------------------- LIFE CYCLE -----------------------------------
