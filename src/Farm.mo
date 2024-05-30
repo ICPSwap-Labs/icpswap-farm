@@ -208,6 +208,7 @@ shared (initMsg) actor class Farm(
             liquidity = positionInfo.liquidity;
             rewardAmount = 0;
             initTime = nowTime;
+            lastDistributeTime = 0;
             token0Amount = positionTokenAmounts.amount0;
             token1Amount = positionTokenAmounts.amount1;
           },
@@ -931,7 +932,11 @@ shared (initMsg) actor class Farm(
 
       for ((id, deposit) in depositMap.entries()) {
         if ((_priceInsideLimit and (_poolMetadata.tick <= deposit.tickUpper and _poolMetadata.tick >= deposit.tickLower)) or (not _priceInsideLimit)) {
-          totalWeightedRatio := totalWeightedRatio + deposit.liquidity * (currentTime - deposit.initTime);
+          if (Nat.equal(deposit.lastDistributeTime, 0)) {
+            totalWeightedRatio := totalWeightedRatio + deposit.liquidity * (currentTime - deposit.initTime);
+          } else {
+            totalWeightedRatio := totalWeightedRatio + deposit.liquidity * (currentTime - deposit.lastDistributeTime);
+          };
         };
       };
       // Debug.print("totalWeightedRatio: " # debug_show (totalWeightedRatio));
@@ -968,6 +973,7 @@ shared (initMsg) actor class Farm(
             rewardAmount = deposit.rewardAmount + rewardAmount;
             liquidity = deposit.liquidity;
             initTime = deposit.initTime;
+            lastDistributeTime = currentTime;
             token0Amount = amountResult.amount0;
             token1Amount = amountResult.amount1;
           },
