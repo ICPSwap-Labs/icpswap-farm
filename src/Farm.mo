@@ -1217,17 +1217,19 @@ shared (initMsg) actor class Farm(
   }) : Bool {
     return switch (msg) {
       // Controller
-      case (#init args)               { _hasPermission(caller) };
-      case (#setAdmins args)          { _hasPermission(caller) };
+      case (#init args)                       { _hasPermission(caller) };
+      case (#setAdmins args)                  { _hasPermission(caller) };
       // Admin
-      case (#finishManually args)     { _hasAdminPermission(caller) };
-      case (#restartManually args)    { _hasAdminPermission(caller) };
-      case (#close args)              { _hasAdminPermission(caller) };
-      case (#clearErrorLog args)      { _hasAdminPermission(caller) };
-      case (#setLimitInfo args)       { _hasAdminPermission(caller) };
-      case (#withdrawRewardFee args)  { Principal.equal(caller, initArgs.feeReceiverCid); };
+      case (#close args)                      { _hasAdminPermission(caller) };
+      case (#clearErrorLog args)              { _hasAdminPermission(caller) };
+      case (#finishManually args)             { _hasAdminPermission(caller) };
+      case (#removeErrorTransferLog args)     { _hasAdminPermission(caller) };
+      case (#restartManually args)            { _hasAdminPermission(caller) };
+      case (#sendRewardManually args)         { _hasAdminPermission(caller) };
+      case (#setLimitInfo args)               { _hasAdminPermission(caller) };
+      case (#withdrawRewardFee args)          { Principal.equal(caller, initArgs.feeReceiverCid); };
       // Anyone
-      case (_)                        { true };
+      case (_)                                { true };
     };
   };
 
