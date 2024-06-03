@@ -76,7 +76,7 @@ module {
         token1AmountLimit : Nat;
         priceInsideLimit : Bool;
         creator : Principal;
-        farmControllerCid : Principal;
+        farmFactoryCid : Principal;
         feeReceiverCid : Principal;
         fee : Nat;
         governanceCid : ?Principal;
@@ -202,7 +202,7 @@ module {
         daysFrom19700101: Nat;
         timestamp: Nat;
     };
-    public type FarmControllerMsg = {
+    public type FarmFactoryMsg = {
         #addFarmControllers : () -> (Principal, [Principal]);
         #create : () -> CreateFarmArgs;
         #getAdmins : () -> ();
@@ -263,7 +263,7 @@ module {
         #transferAll : () -> (Token, Principal);
     };
 
-    public type IFarmController = actor {
+    public type IFarmFactory = actor {
         create : shared CreateFarmArgs -> async Result.Result<Text, Text>;
         setAdmins : shared [Principal] -> async ();
         getAdmins : query () -> async Result.Result<[Principal], Error>;

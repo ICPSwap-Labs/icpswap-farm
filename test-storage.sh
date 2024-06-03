@@ -7,8 +7,8 @@ mv dfx.json dfx.json.bak
 cat > dfx.json <<- EOF
 {
   "canisters": {
-    "FarmController": {
-      "main": "./src/FarmController.mo",
+    "FarmFactory": {
+      "main": "./src/FarmFactory.mo",
       "type": "motoko"
     },
     "FarmFeeReceiver": {
@@ -115,8 +115,8 @@ echo "==> install PasscodeManager"
 dfx canister install PasscodeManager --argument="(principal \"$(dfx canister id ICRC2)\", 100000000, principal \"$(dfx canister id SwapFactory)\")"
 echo "==> install FarmFeeReceiver"
 dfx canister install FarmFeeReceiver
-echo "==> install FarmController"
-dfx canister install FarmController --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null)"
+echo "==> install FarmFactory"
+dfx canister install FarmFactory --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null)"
 
 dipAId=`dfx canister id DIP20A`
 dipBId=`dfx canister id DIP20B`
@@ -125,14 +125,14 @@ infoId=`dfx canister id base_index`
 swapFactoryId=`dfx canister id SwapFactory`
 positionIndexId=`dfx canister id PositionIndex`
 swapFeeReceiverId=`dfx canister id SwapFeeReceiver`
-farmControllerId=`dfx canister id FarmController`
+farmFactoryId=`dfx canister id FarmFactory`
 farmFeeReceiverId=`dfx canister id FarmFeeReceiver`
 zeroForOne="true"
 ICP="$(dfx canister id ICRC2)"
 echo "==> infoId (\"$infoId\")"
 echo "==> positionIndexId (\"$positionIndexId\")"
 echo "==> swapFeeReceiverId (\"$swapFeeReceiverId\")"
-echo "==> farmControllerId (\"$farmControllerId\")"
+echo "==> farmFactoryId (\"$farmFactoryId\")"
 echo "==> ICP (\"$ICP\")"
 
 dfx canister call base_index addClient "(principal \"$swapFactoryId\")"
@@ -270,8 +270,8 @@ function create_farm()
     one_day_seconds=$((60 * 60 * 24))
     one_day_later_timestamp=$((current_timestamp + one_day_seconds))
 
-    # result=`dfx canister call FarmController create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 100000000000000; token1AmountLimit = 100000000000000; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
-    result=`dfx canister call FarmController create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $one_day_later_timestamp; secondPerCycle = 10; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
+    # result=`dfx canister call FarmFactory create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 100000000000000; token1AmountLimit = 100000000000000; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
+    result=`dfx canister call FarmFactory create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $one_day_later_timestamp; secondPerCycle = 10; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
     echo "\033[32m create farm result: $result \033[0m"
 
     if [[ $result =~ ok\ =\ \"([^\"]+)\" ]]; then

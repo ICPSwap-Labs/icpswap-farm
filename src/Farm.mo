@@ -97,7 +97,7 @@ shared (initMsg) actor class Farm(
   private stable var _rewardPoolAct = actor (Principal.toText(initArgs.rewardPool)) : actor {
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
   };
-  private stable var _farmControllerAct = actor (Principal.toText(initArgs.farmControllerCid)) : actor {
+  private stable var _farmFactoryAct = actor (Principal.toText(initArgs.farmFactoryCid)) : actor {
     updateFarmInfo : shared (status : Types.FarmStatus, tvl : Types.TVL) -> async ();
   };
 
@@ -340,14 +340,14 @@ shared (initMsg) actor class Farm(
   public shared (msg) func finishManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #FINISHED;
-    await _farmControllerAct.updateFarmInfo(_status, _TVL);
+    await _farmFactoryAct.updateFarmInfo(_status, _TVL);
     return #ok("Finish farm successfully");
   };
 
   public shared (msg) func restartManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #LIVE;
-    await _farmControllerAct.updateFarmInfo(_status, _TVL);
+    await _farmFactoryAct.updateFarmInfo(_status, _TVL);
     return #ok("Restart farm successfully");
   };
 
@@ -496,7 +496,7 @@ shared (initMsg) actor class Farm(
       try {
         switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.refunder; subaccount = null }; amount = amount; fee = ?_totalRewardFee; memo = null; created_at_time = null })) {
           case (#Ok(index)) {
-            await _farmControllerAct.updateFarmInfo(
+            await _farmFactoryAct.updateFarmInfo(
               #CLOSED,
               {
                 poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
@@ -529,7 +529,7 @@ shared (initMsg) actor class Farm(
         _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # ".");
       };
     } else {
-      await _farmControllerAct.updateFarmInfo(
+      await _farmFactoryAct.updateFarmInfo(
         #CLOSED,
         {
           poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
@@ -871,7 +871,7 @@ shared (initMsg) actor class Farm(
     if (_status == #FINISHED and (_totalRewardBalance == 0 and _positionIds.size() == 0)) {
       _status := #CLOSED;
     };
-    await _farmControllerAct.updateFarmInfo(_status, _TVL);
+    await _farmFactoryAct.updateFarmInfo(_status, _TVL);
   };
 
   private func _syncPoolMeta() : async () {

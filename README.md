@@ -4,7 +4,7 @@ The code is written in Motoko and developed in the DFINITY command-line executio
 
 ## Introduction
 
-**FarmController**
+**FarmFactory**
 
 This actor is mainly responsible for creating a reward farm. The admin can call the create function to create a valid reward farm. The validity verification mainly includes: the reward amount *rewardAmount* must be a positive number, the validity of the farm start time *startTime* and end time *endTime*, and the farm duration’s validity, the validity of the reward distribution cycle *secondPerCycle* relative to the duration, the reward token *rewardToken* in the farm must exist in the *rewardPool* formed by it and the platform currency icp, etc.
 
@@ -47,7 +47,7 @@ Tool canister:
 
 Regarding these canisters, only the data collection canisters are self-developed by ICPSwap, the rest can be found in the current project, or other projects that have been open-sourced in IC ecosystem. We have a plan to open source this part of the code later, for now, please use the compiled wasm and did files in the current project.
 
-When running the `test-flow.sh` script for the first time, in order to shorten the testing time, we use shorter pledge duration and distribution cycle. So we can find the function *create* in FarmController.mo.
+When running the `test-flow.sh` script for the first time, in order to shorten the testing time, we use shorter pledge duration and distribution cycle. So we can find the function *create* in FarmFactory.mo.
 
 Comment out these lines:
 

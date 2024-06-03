@@ -10,8 +10,8 @@ import Result "mo:base/Result";
 import SafeUint "mo:commons/math/SafeUint";
 import Types "./Types";
 
-shared (initMsg) actor class FarmControllerValidator(
-    farmControllerCid : Principal,
+shared (initMsg) actor class FarmFactoryValidator(
+    farmFactoryCid : Principal,
     governanceCid : Principal,
 ) = this {
 
@@ -30,7 +30,7 @@ shared (initMsg) actor class FarmControllerValidator(
     private stable var FOUR_HOURS : Nat = 14400;
     private stable var THIRTY_MINUTES : Nat = 1800;
 
-    private var _farmControllerAct = actor (Principal.toText(farmControllerCid)) : Types.IFarmController;
+    private var _farmFactoryAct = actor (Principal.toText(farmFactoryCid)) : Types.IFarmFactory;
 
     // public shared (msg) func createValidate(args : Types.CreateFarmArgs) : async Result {
     //     assert (Principal.equal(msg.caller, governanceCid));
@@ -82,14 +82,14 @@ shared (initMsg) actor class FarmControllerValidator(
     //         };
     //     };
 
-    //     switch (await _farmControllerAct.getCycleInfo()) {
+    //     switch (await _farmFactoryAct.getCycleInfo()) {
     //         case (#ok(cycleInfo)) {
     //             if (cycleInfo.balance <= _initCycles or cycleInfo.available <= _initCycles) {
     //                 return #Err("Insufficient Cycle Balance.");
     //             };
     //         };
     //         case (#err(code)) {
-    //             return #Err("Get cycle info of FarmController failed: " # debug_show (code));
+    //             return #Err("Get cycle info of FarmFactory failed: " # debug_show (code));
     //         };
     //     };
 
@@ -123,19 +123,19 @@ shared (initMsg) actor class FarmControllerValidator(
             return #Err(Principal.toText(farmCid) # " doesn't exist.");
         };
         for (it in controllers.vals()) {
-            if (Principal.equal(it, farmControllerCid)) {
-                return #Err("FarmController must be the controller of Farm.");
+            if (Principal.equal(it, farmFactoryCid)) {
+                return #Err("FarmFactory must be the controller of Farm.");
             };
         };
         return #Ok(debug_show (farmCid) # ", " # debug_show (controllers));
     };
 
     public query func getInitArgs() : async Result.Result<{
-        farmControllerCid : Principal;
+        farmFactoryCid : Principal;
         governanceCid : Principal;
     }, Types.Error> {
         #ok({
-            farmControllerCid = farmControllerCid;
+            farmFactoryCid = farmFactoryCid;
             governanceCid = governanceCid;
         });
     };
@@ -145,7 +145,7 @@ shared (initMsg) actor class FarmControllerValidator(
     };
 
     private func _checkFarm(farmCid : Principal) : async Bool {
-        switch (await _farmControllerAct.getAllFarmId()) {
+        switch (await _farmFactoryAct.getAllFarmId()) {
             case (#ok(farms)) {
                 for (it in farms.vals()) {
                     if (Principal.equal(farmCid, it)) {
