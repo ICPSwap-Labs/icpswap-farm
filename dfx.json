@@ -1,7 +1,7 @@
 {
   "canisters": {
-    "FarmController": {
-      "main": "./src/FarmController.mo",
+    "FarmFactory": {
+      "main": "./src/FarmFactory.mo",
       "type": "motoko"
     },
     "FarmFeeReceiver": {
