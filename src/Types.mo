@@ -233,6 +233,7 @@ module {
         #getLimitInfo : () -> ();
         #getLiquidityInfo : () -> ();
         #getPoolMeta : () -> ();
+        #getPoolTokenMeta : () -> ();
         #getPositionIds : () -> ();
         #getRewardInfo : () -> [Nat];
         #getRewardMeta : () -> ();

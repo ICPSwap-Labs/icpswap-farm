@@ -58,6 +58,10 @@ shared (initMsg) actor class Farm(
   // position pool metadata
   private stable var _poolToken0 = { address = ""; standard = "" };
   private stable var _poolToken1 = { address = ""; standard = "" };
+  private stable var _poolToken0Symbol = "";
+  private stable var _poolToken1Symbol = "";
+  private stable var _poolToken0Decimals = 0;
+  private stable var _poolToken1Decimals = 0;
   private stable var _poolToken0Amount = 0;
   private stable var _poolToken1Amount = 0;
   private stable var _poolFee : Nat = 0;
@@ -131,6 +135,14 @@ shared (initMsg) actor class Farm(
     _poolToken0 := poolMetadata.token0;
     _poolToken1 := poolMetadata.token1;
 
+    let _poolToken0Adapter = TokenFactory.getAdapter(poolMetadata.token0.address, poolMetadata.token0.standard);
+    let _poolToken1Adapter = TokenFactory.getAdapter(poolMetadata.token1.address, poolMetadata.token1.standard);
+
+    _poolToken0Symbol := await _poolToken0Adapter.symbol();
+    _poolToken1Symbol := await _poolToken1Adapter.symbol();
+    _poolToken0Decimals := Nat8.toNat(await _poolToken0Adapter.decimals());
+    _poolToken1Decimals := Nat8.toNat(await _poolToken1Adapter.decimals());
+
     _rewardTokenFee := await _rewardTokenAdapter.fee();
     _poolMetadata := {
       sqrtPriceX96 = poolMetadata.sqrtPriceX96;
@@ -176,10 +188,16 @@ shared (initMsg) actor class Farm(
       case (#err(msg)) { { amount0 = 0; amount1 = 0 } };
     };
     if (_token0AmountLimit != 0 and positionTokenAmounts.amount0 < _token0AmountLimit) {
-      return #err(#InternalError("The quantity of token0 does not reach the low limit"));
+      return #err(#InternalError(
+        "The quantity of " # _poolToken0Symbol # " does not reach the low limit: " 
+        # debug_show(Float.div(Float.fromInt(SafeInt.Int256(_token0AmountLimit).val()), Float.fromInt(SafeInt.Int256(_poolToken0Decimals).val())))
+      ));
     };
     if (_token1AmountLimit != 0 and positionTokenAmounts.amount1 < _token1AmountLimit) {
-      return #err(#InternalError("The quantity of token1 does not reach the low limit"));
+      return #err(#InternalError(
+        "The quantity of " # _poolToken1Symbol # " does not reach the low limit: "
+        # debug_show(Float.div(Float.fromInt(SafeInt.Int256(_token1AmountLimit).val()), Float.fromInt(SafeInt.Int256(_poolToken1Decimals).val())))
+      ));
     };
     if (positionInfo.liquidity <= 0) {
       return #err(#InternalError("Can not stake a position with no liquidity"));
@@ -522,7 +540,7 @@ shared (initMsg) actor class Farm(
             };
           };
           case (#Err(code)) {
-            _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . code: " # debug_show (code) # ".");
+            _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . Code: " # debug_show (code) # ".");
           };
         };
       } catch (e) {
@@ -714,6 +732,24 @@ shared (initMsg) actor class Farm(
       token0AmountLimit = _token0AmountLimit;
       token1AmountLimit = _token1AmountLimit;
       priceInsideLimit = _priceInsideLimit;
+    });
+  };
+
+  public query func getPoolTokenMeta() : async Result.Result<{
+    poolToken0 : { address : Text; standard : Text; };
+    poolToken1 : { address : Text; standard : Text; };
+    poolToken0Symbol : Text;
+    poolToken1Symbol : Text;
+    poolToken0Decimals : Nat;
+    poolToken1Decimals : Nat;
+  }, Types.Error> {
+    return #ok({
+      poolToken0 = _poolToken0;
+      poolToken1 = _poolToken1;
+      poolToken0Symbol = _poolToken0Symbol;
+      poolToken1Symbol = _poolToken1Symbol;
+      poolToken0Decimals = _poolToken0Decimals;
+      poolToken1Decimals = _poolToken1Decimals;
     });
   };
 
