@@ -190,13 +190,13 @@ shared (initMsg) actor class Farm(
     if (_token0AmountLimit != 0 and positionTokenAmounts.amount0 < _token0AmountLimit) {
       return #err(#InternalError(
         "The quantity of " # _poolToken0Symbol # " does not reach the low limit: " 
-        # debug_show(Float.div(Float.fromInt(SafeInt.Int256(_token0AmountLimit).val()), Float.fromInt(SafeInt.Int256(_poolToken0Decimals).val())))
+        # debug_show(Float.div(Float.fromInt(SafeInt.Int256(_token0AmountLimit).val()), Float.fromInt(SafeInt.Int256(10 ** _poolToken0Decimals).val())))
       ));
     };
     if (_token1AmountLimit != 0 and positionTokenAmounts.amount1 < _token1AmountLimit) {
       return #err(#InternalError(
         "The quantity of " # _poolToken1Symbol # " does not reach the low limit: "
-        # debug_show(Float.div(Float.fromInt(SafeInt.Int256(_token1AmountLimit).val()), Float.fromInt(SafeInt.Int256(_poolToken1Decimals).val())))
+        # debug_show(Float.div(Float.fromInt(SafeInt.Int256(_token1AmountLimit).val()), Float.fromInt(SafeInt.Int256(10 ** _poolToken1Decimals).val())))
       ));
     };
     if (positionInfo.liquidity <= 0) {
