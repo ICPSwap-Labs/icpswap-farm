@@ -7,6 +7,7 @@ import Error "mo:base/Error";
 import Bool "mo:base/Bool";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
+import Cycles "mo:base/ExperimentalCycles";
 import SafeUint "mo:commons/math/SafeUint";
 import Types "./Types";
 
@@ -130,15 +131,23 @@ shared (initMsg) actor class FarmFactoryValidator(
         return #Ok(debug_show (farmCid) # ", " # debug_show (controllers));
     };
 
-    public query func getInitArgs() : async Result.Result<{
-        farmFactoryCid : Principal;
-        governanceCid : Principal;
-    }, Types.Error> {
+    public query func getInitArgs() : async Result.Result<{ farmFactoryCid : Principal; governanceCid : Principal }, Types.Error> {
         #ok({
             farmFactoryCid = farmFactoryCid;
             governanceCid = governanceCid;
         });
     };
+
+    public shared (msg) func getCycleInfo() : async Result.Result<Types.CycleInfo, Types.Error> {
+        return #ok({
+            balance = Cycles.balance();
+            available = Cycles.available();
+        });
+    };
+
+    // --------------------------- Version Control ------------------------------------
+    private var _version : Text = "3.1.0";
+    public query func getVersion() : async Text { _version };
 
     private func _getTime() : Nat {
         return Nat64.toNat(Int64.toNat64(Int64.fromInt(Time.now() / 1000000000)));
