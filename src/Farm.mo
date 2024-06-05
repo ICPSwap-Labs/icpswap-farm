@@ -988,7 +988,11 @@ shared (initMsg) actor class Farm(
         poolToken1Amount := poolToken1Amount + amountResult.amount1;
         var rewardAmount : Nat = 0;
         if ((_priceInsideLimit and (_poolMetadata.tick <= deposit.tickUpper and _poolMetadata.tick >= deposit.tickLower)) or (not _priceInsideLimit)) {
-          rewardAmount := _computeReward(deposit.liquidity * (currentTime - deposit.initTime), totalWeightedRatio);
+          rewardAmount := if (Nat.equal(deposit.lastDistributeTime, 0)) {
+            _computeReward(deposit.liquidity * (currentTime - deposit.initTime), totalWeightedRatio);
+          } else {
+            _computeReward(deposit.liquidity * (currentTime - deposit.lastDistributeTime), totalWeightedRatio);  
+          };
           // distribute reward record
           _distributeRecordBuffer.add({
             timestamp = currentTime;
