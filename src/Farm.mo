@@ -778,6 +778,10 @@ shared (initMsg) actor class Farm(
     };
   };
 
+  public query (msg) func getTransferLogs() : async Result.Result<[Types.TransferLog], Types.Error> {
+      return #ok(Iter.toArray(_transferLog.vals()));
+  };
+
   public query func getStakeRecord(offset : Nat, limit : Nat, from : Text) : async Result.Result<Types.Page<Types.StakeRecord>, Text> {
     let size = _stakeRecordBuffer.size();
     if (size == 0) {
