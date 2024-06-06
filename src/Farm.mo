@@ -322,8 +322,8 @@ shared (initMsg) actor class Farm(
     if (Principal.isAnonymous(caller)) return #err(#InternalError("Illegal anonymous call"));
     var canisterId = Principal.fromActor(this);
     var balance : Nat = _rewardTokenHolderService.getBalance(caller);
-    if (balance <= 0) { return #err(#InsufficientFunds) };
-    if (balance <= _rewardTokenFee) { return #err(#InsufficientFunds) };
+    if (balance <= _rewardTokenFee) { return #ok(0) };
+    // if (balance <= _rewardTokenFee) { return #err(#InsufficientFunds) };
     if (_rewardTokenHolderService.withdraw(caller, balance)) {
       var amount : Nat = Nat.sub(balance, _rewardTokenFee);
       var preTransIndex = _preTransfer(caller, canisterId, null, caller, "withdraw", initArgs.rewardToken, amount, _rewardTokenFee);
@@ -380,13 +380,13 @@ shared (initMsg) actor class Farm(
       };
       case (_) {
         var canisterId = Principal.fromActor(this);
-        var preTransIndexList : Buffer.Buffer<(Principal, Nat)> = Buffer.Buffer<(Principal, Nat)>(0);
+        var preTransIndexBalanceList : Buffer.Buffer<(Principal, (Nat, Nat))> = Buffer.Buffer<(Principal, (Nat, Nat))>(0);
         var insufficientFundList : Buffer.Buffer<(Principal, Nat)> = Buffer.Buffer<(Principal, Nat)>(0);
         for ((principal, balance) in _rewardTokenHolderService.getAllBalances().entries()) {
           if (balance > _rewardTokenFee) {
             var amount = balance - _rewardTokenFee;
             var preTransIndex = _preTransfer(principal, canisterId, null, principal, "withdraw", initArgs.rewardToken, amount, _rewardTokenFee);
-            preTransIndexList.add((principal, preTransIndex));
+            preTransIndexBalanceList.add((principal, (preTransIndex, balance)));
           } else {
             insufficientFundList.add(principal, balance);
           };
@@ -395,11 +395,9 @@ shared (initMsg) actor class Farm(
           ignore _rewardTokenHolderService.withdraw(principal, balance);
         };
         var passedIndexList : Buffer.Buffer<Nat> = Buffer.Buffer<Nat>(0);
-        var passedBalanceList : Buffer.Buffer<(Principal, Nat)> = Buffer.Buffer<(Principal, Nat)>(0);
         var failedIndexList : Buffer.Buffer<(Nat, Text)> = Buffer.Buffer<(Nat, Text)>(0);
-        for ((principal, preTransIndex) in preTransIndexList.vals()) {
+        for ((principal, (preTransIndex, balance)) in preTransIndexBalanceList.vals()) {
           try {
-            let balance = _rewardTokenHolderService.getBalance(principal);
             switch (await _rewardTokenAdapter.transfer({
               from = { owner = canisterId; subaccount = null }; from_subaccount = null; 
               to = { owner = principal; subaccount = null }; 
@@ -409,7 +407,6 @@ shared (initMsg) actor class Farm(
               created_at_time = null 
             })) {
               case (#Ok(index)) {
-                passedBalanceList.add(principal, balance);
                 passedIndexList.add(preTransIndex);
               };
               case (#Err(msg)) {
@@ -420,11 +417,11 @@ shared (initMsg) actor class Farm(
             failedIndexList.add((preTransIndex, debug_show (Error.message(e))));
           };
         };
+        for ((principal, (preTransIndex, balance)) in preTransIndexBalanceList.vals()) {
+          ignore _rewardTokenHolderService.withdraw(principal, balance);
+        };
         for (preTransIndex in passedIndexList.vals()) {
           _postTransferComplete(preTransIndex);
-        };
-        for ((principal, balance) in passedBalanceList.vals()) {
-          ignore _rewardTokenHolderService.withdraw(principal, balance);
         };
         for ((preTransIndex, msg) in failedIndexList.vals()) {
           _postTransferError(preTransIndex, msg);
