@@ -240,6 +240,7 @@ module {
         #getRewardTokenBalance : () -> ();
         #getStakeRecord : () -> (Nat, Nat, Text);
         #getTVL : () -> ();
+        #getTransferLogs : () -> ();
         #getUserDeposits : () -> Principal;
         #getUserRewardBalance : () -> Principal;
         #getUserRewardBalances : () -> (Nat, Nat);
