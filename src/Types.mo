@@ -18,6 +18,12 @@ module {
     public func hash(x : Nat) : Hash.Hash {
         return Prim.natToNat32(x);
     };
+    public func tokenEqual(t1 : Token, t2 : Token) : Bool {
+        return Text.equal(t1.address, t2.address) and Text.equal(t1.standard, t2.standard);
+    };
+    public func tokenHash(t : Token) : Hash.Hash {
+        return Text.hash(t.address # t.standard);
+    };
 
     public type FarmStatus = {
         #NOT_STARTED;
@@ -39,11 +45,9 @@ module {
         address : Text;
         standard : Text;
     };
-    public type SwapArgs = {
-        operator : Principal;
-        zeroForOne : Bool;
-        amountIn : Text;
-        amountOutMinimum : Text;
+     public type TokenBalance = {
+        token : Token;
+        balance : Nat;
     };
     public type CreateFarmArgs = {
         rewardToken : Token;
@@ -72,7 +76,7 @@ module {
         token1AmountLimit : Nat;
         priceInsideLimit : Bool;
         creator : Principal;
-        farmControllerCid : Principal;
+        farmFactoryCid : Principal;
         feeReceiverCid : Principal;
         fee : Nat;
         governanceCid : ?Principal;
@@ -106,6 +110,7 @@ module {
         owner : Principal;
         holder : Principal;
         initTime : Nat;
+        lastDistributeTime : Nat;
         positionId : Nat;
         tickLower : Int;
         tickUpper : Int;
@@ -182,7 +187,22 @@ module {
         locked : Bool;
         time : Time.Time;
     };
-    public type FarmControllerMsg = {
+    public type TransferLog = {
+        index: Nat;
+        owner: Principal;
+        from: Principal;
+        fromSubaccount: ?Blob;
+        to: Principal;
+        action: Text;  // deposit, withdraw
+        amount: Nat;
+        fee: Nat;
+        token: Token;
+        result: Text;  // processing, success, error
+        errorMsg: Text;
+        daysFrom19700101: Nat;
+        timestamp: Nat;
+    };
+    public type FarmFactoryMsg = {
         #addFarmControllers : () -> (Principal, [Principal]);
         #create : () -> CreateFarmArgs;
         #getAdmins : () -> ();
@@ -213,21 +233,28 @@ module {
         #getLimitInfo : () -> ();
         #getLiquidityInfo : () -> ();
         #getPoolMeta : () -> ();
+        #getPoolTokenMeta : () -> ();
         #getPositionIds : () -> ();
         #getRewardInfo : () -> [Nat];
         #getRewardMeta : () -> ();
         #getRewardTokenBalance : () -> ();
         #getStakeRecord : () -> (Nat, Nat, Text);
         #getTVL : () -> ();
+        #getTransferLogs : () -> ();
         #getUserDeposits : () -> Principal;
+        #getUserRewardBalance : () -> Principal;
+        #getUserRewardBalances : () -> (Nat, Nat);
         #getUserTVL : () -> Principal;
         #getVersion : () -> ();
         #init : () -> ();
+        #removeErrorTransferLog : () -> (Nat, Bool);
         #restartManually : () -> ();
+        #sendRewardManually : () -> ();
         #setAdmins : () -> [Principal];
         #setLimitInfo : () -> (Nat, Nat, Nat, Bool);
         #stake : () -> Nat;
         #unstake : () -> Nat;
+        #withdraw : () -> ();
         #withdrawRewardFee : () -> ();
     };
     public type FarmFeeReceiver = {
@@ -238,7 +265,7 @@ module {
         #transferAll : () -> (Token, Principal);
     };
 
-    public type IFarmController = actor {
+    public type IFarmFactory = actor {
         create : shared CreateFarmArgs -> async Result.Result<Text, Text>;
         setAdmins : shared [Principal] -> async ();
         getAdmins : query () -> async Result.Result<[Principal], Error>;

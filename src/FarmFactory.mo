@@ -24,7 +24,7 @@ import Types "./Types";
 import Prim "mo:⛔";
 import FarmDataService "./components/FarmData";
 
-shared (initMsg) actor class FarmController(
+shared (initMsg) actor class FarmFactory(
     feeReceiverCid : Principal,
     governanceCid : ?Principal,
 ) = this {
@@ -118,7 +118,7 @@ shared (initMsg) actor class FarmController(
             };
 
             Cycles.add(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmControllerCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; }));
+            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
@@ -299,7 +299,7 @@ shared (initMsg) actor class FarmController(
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.0.2";
+    private var _version : Text = "3.1.0";
     public query func getVersion() : async Text { _version };
 
     // --------------------------- LIFE CYCLE -----------------------------------
@@ -311,7 +311,7 @@ shared (initMsg) actor class FarmController(
     system func inspect({
         arg : Blob;
         caller : Principal;
-        msg : Types.FarmControllerMsg;
+        msg : Types.FarmFactoryMsg;
     }) : Bool {
         return switch (msg) {
             // Controller
