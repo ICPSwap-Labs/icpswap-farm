@@ -512,6 +512,7 @@ shared (initMsg) actor class Farm(
     Timer.cancelTimer(_distributeRewardPerCycle);
     Timer.cancelTimer(_syncPoolMetaPer60s);
     Timer.cancelTimer(_updateStatusPer60s);
+    Timer.cancelTimer(_updatePrincipalRecordPer1h);
 
     if (balance > _rewardTokenFee) {
       var amount = balance - _rewardTokenFee;
@@ -526,6 +527,7 @@ shared (initMsg) actor class Farm(
                 rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
               },
             );
+            await _farmFactoryAct.updatePrincipalRecord(TrieSet.toArray(_principalRecordSet));
             _stakeRecordBuffer.add({
               timestamp = nowTime;
               transType = #harvest;
@@ -559,6 +561,7 @@ shared (initMsg) actor class Farm(
           rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
         },
       );
+      await _farmFactoryAct.updatePrincipalRecord(TrieSet.toArray(_principalRecordSet));
       _totalRewardBalance := 0;
       _status := #CLOSED;
       _TVL := {
