@@ -7,7 +7,9 @@ import Blob "mo:base/Blob";
 import Debug "mo:base/Debug";
 import Float "mo:base/Float";
 import Nat8 "mo:base/Nat8";
+import Nat32 "mo:base/Nat32";
 import HashMap "mo:base/HashMap";
+import TrieSet "mo:base/TrieSet";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import List "mo:base/List";
@@ -91,6 +93,7 @@ shared (initMsg) actor class Farm(
   private var _stakeRecordBuffer : Buffer.Buffer<Types.StakeRecord> = Buffer.Buffer<Types.StakeRecord>(0);
   private stable var _distributeRecordList : [Types.DistributeRecord] = [];
   private var _distributeRecordBuffer : Buffer.Buffer<Types.DistributeRecord> = Buffer.Buffer<Types.DistributeRecord>(0);
+  private stable var _principalRecordSet = TrieSet.empty<Principal>();
 
   let _rewardTokenAdapter = TokenFactory.getAdapter(initArgs.rewardToken.address, initArgs.rewardToken.standard);
   private stable var _swapPoolAct = actor (Principal.toText(initArgs.pool)) : actor {
@@ -103,6 +106,7 @@ shared (initMsg) actor class Farm(
   };
   private stable var _farmFactoryAct = actor (Principal.toText(initArgs.farmFactoryCid)) : actor {
     updateFarmInfo : shared (status : Types.FarmStatus, tvl : Types.TVL) -> async ();
+    updatePrincipalRecord : shared (principalRecord : [Principal]) -> async ();
   };
 
   private stable var _inited : Bool = false;
@@ -238,6 +242,9 @@ shared (initMsg) actor class Farm(
         _positionIds := Buffer.toArray(tempGlobalPositionIds);
 
         _totalLiquidity := _totalLiquidity + positionInfo.liquidity;
+
+        // principle record        
+        _principalRecordSet := TrieSet.put<Principal>(_principalRecordSet, msg.caller, _hashPrincipal(msg.caller), Principal.equal);
 
         // stake record
         _stakeRecordBuffer.add({
@@ -719,6 +726,10 @@ shared (initMsg) actor class Farm(
     return #ok(_TVL);
   };
 
+  public query (msg) func getPrincipalRecord() : async Result.Result<[Principal], Types.Error> {
+    return #ok(TrieSet.toArray(_principalRecordSet));
+  };
+
   public query func getInitArgs() : async Result.Result<Types.InitFarmArgs, Types.Error> {
     return #ok(initArgs);
   };
@@ -909,6 +920,11 @@ shared (initMsg) actor class Farm(
       _status := #CLOSED;
     };
     await _farmFactoryAct.updateFarmInfo(_status, _TVL);
+  };
+
+  private func _updatePrincipalRecord() : async () {
+    Debug.print(" ---> _updatePrincipalRecord ");
+    await _farmFactoryAct.updatePrincipalRecord(TrieSet.toArray(_principalRecordSet));
   };
 
   private func _syncPoolMeta() : async () {
@@ -1117,6 +1133,10 @@ shared (initMsg) actor class Farm(
     return Array.tabulate<Nat8>(len, ith_byte);
   };
 
+  private func _hashPrincipal(key : Principal) : Nat32 {
+    Prim.hashBlob(Prim.encodeUtf8(Principal.toText(key))) & 0x3fffffff;
+  };
+
   // --------------------------- ACL ------------------------------------
   private stable var _admins : [Principal] = [initArgs.creator];
   public shared (msg) func setAdmins(admins : [Principal]) : async () {
@@ -1220,6 +1240,10 @@ shared (initMsg) actor class Farm(
     #seconds(60),
     _updateStatus,
   );
+  let _updatePrincipalRecordPer1h = Timer.recurringTimer(
+    #seconds(3600),
+    _updatePrincipalRecord,
+  );
   let _updateRewardTokenFeePer1h = Timer.recurringTimer(
     #seconds(3600),
     _updateRewardTokenFee,
@@ -1241,9 +1265,7 @@ shared (initMsg) actor class Farm(
   system func postupgrade() {
     for (record in _errorLogList.vals()) { _errorLogBuffer.add(record) };
     for (record in _stakeRecordList.vals()) { _stakeRecordBuffer.add(record) };
-    for (record in _distributeRecordList.vals()) {
-      _distributeRecordBuffer.add(record);
-    };
+    for (record in _distributeRecordList.vals()) { _distributeRecordBuffer.add(record); };
     _stakeRecordList := [];
     _distributeRecordList := [];
     _errorLogList := [];
