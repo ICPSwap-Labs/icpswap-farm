@@ -9,7 +9,9 @@ import Int "mo:base/Int";
 import List "mo:base/List";
 import Time "mo:base/Time";
 import Nat "mo:base/Nat";
+import Nat32 "mo:base/Nat32";
 import Nat64 "mo:base/Nat64";
+import TrieSet "mo:base/TrieSet";
 import Int64 "mo:base/Int64";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
@@ -46,6 +48,8 @@ shared (initMsg) actor class FarmFactory(
 
     // the fee that is taken from every unstake that is executed on the farm in 1 per thousand
     private stable var _fee : Nat = 50;
+
+    private stable var _principalRecordSet = TrieSet.empty<Principal>();
 
     private stable var _farmDataState : FarmDataService.State = {
         notStartedFarmEntries = [];
@@ -160,6 +164,15 @@ shared (initMsg) actor class FarmFactory(
         };
     };
 
+    public shared (msg) func updatePrincipalRecord(principalRecord : [Principal]) : async () {
+        if (not CollectionUtils.arrayContains(_farmDataService.getAllFarmId(), msg.caller, Principal.equal)) {
+            return;
+        };
+        
+        let principalRecordSet = TrieSet.fromArray<Principal>(principalRecord, _hashPrincipal, Principal.equal);
+        _principalRecordSet := TrieSet.union(_principalRecordSet, principalRecordSet, Principal.equal);
+    };
+
     public shared (msg) func getCycleInfo() : async Result.Result<Types.CycleInfo, Types.Error> {
         return #ok({
             balance = Cycles.balance();
@@ -207,6 +220,17 @@ shared (initMsg) actor class FarmFactory(
         return #ok(_farmDataService.getAllFarmId());
     };
 
+    public query (msg) func getPrincipalRecord() : async Result.Result<[Principal], Types.Error> {
+        return #ok(TrieSet.toArray(_principalRecordSet));
+    };
+
+    public query (msg) func getTotalAmount() : async Result.Result<{ farmAmount : Nat; principalAmount : Nat; }, Types.Error> {
+        return #ok({
+            farmAmount = _farmDataService.getAllFarmId().size();
+            principalAmount = TrieSet.size(_principalRecordSet);
+        });
+    };
+
     public query func getInitArgs() : async Result.Result<{ feeReceiverCid : Principal; governanceCid : ?Principal }, Types.Error> {
         #ok({
             feeReceiverCid = feeReceiverCid;
@@ -216,6 +240,10 @@ shared (initMsg) actor class FarmFactory(
 
     private func _getTime() : Nat {
         return Nat64.toNat(Int64.toNat64(Int64.fromInt(Time.now() / 1000000000)));
+    };
+    
+    private func _hashPrincipal(key : Principal) : Nat32 {
+        Prim.hashBlob(Prim.encodeUtf8(Principal.toText(key))) & 0x3fffffff;
     };
 
     // --------------------------- LOCK ------------------------------------
