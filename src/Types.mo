@@ -212,12 +212,15 @@ module {
         #getFarms : () -> ?FarmStatus;
         #getFee : () -> ();
         #getInitArgs : () -> ();
+        #getPrincipalRecord : () -> ();
+        #getTotalAmount : () -> ();
         #getVersion : () -> ();
         #removeFarmControllers : () -> (Principal, [Principal]);
         #setAdmins : () -> [Principal];
         #setFarmAdmins : () -> (Principal, [Principal]);
         #setFee : () -> Nat;
-        #updateFarmInfo : () -> (FarmStatus, TVL)
+        #updateFarmInfo : () -> (FarmStatus, TVL);
+        #updatePrincipalRecord : () -> [Principal];
     };
     public type FarmMsg = {
         #clearErrorLog : () -> ();
@@ -235,6 +238,7 @@ module {
         #getPoolMeta : () -> ();
         #getPoolTokenMeta : () -> ();
         #getPositionIds : () -> ();
+        #getPrincipalRecord : () -> ();
         #getRewardInfo : () -> [Nat];
         #getRewardMeta : () -> ();
         #getRewardTokenBalance : () -> ();
