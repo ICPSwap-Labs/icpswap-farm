@@ -12,7 +12,6 @@ import HashMap "mo:base/HashMap";
 import TrieSet "mo:base/TrieSet";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
-import List "mo:base/List";
 import Time "mo:base/Time";
 import Timer "mo:base/Timer";
 import Nat "mo:base/Nat";
@@ -122,7 +121,7 @@ shared (initMsg) actor class Farm(
 
     let poolMetadata = switch (await _swapPoolAct.metadata()) {
       case (#ok(poolMetadata)) { poolMetadata };
-      case (#err(code)) {
+      case (#err(_)) {
         {
           key = "";
           token0 = { address = ""; standard = "" };
@@ -887,7 +886,6 @@ shared (initMsg) actor class Farm(
     try {
       _rewardTokenFee := await _rewardTokenAdapter.fee();
     } catch (e) {
-      var nowTime = _getTime();
       _errorLogBuffer.add("_updateRewardTokenFee failed " # debug_show (Error.message(e)) # " . nowTime: " # debug_show (_getTime()));
     };
   };
@@ -1231,26 +1229,11 @@ shared (initMsg) actor class Farm(
   };
 
   // --------------------------- SCHEDULE ------------------------------------
-  let _distributeRewardPerCycle = Timer.recurringTimer(
-    #seconds(initArgs.secondPerCycle),
-    _distributeReward,
-  );
-  let _syncPoolMetaPer60s = Timer.recurringTimer(
-    #seconds(60),
-    _syncPoolMeta,
-  );
-  let _updateStatusPer60s = Timer.recurringTimer(
-    #seconds(60),
-    _updateStatus,
-  );
-  let _updatePrincipalRecordPer1h = Timer.recurringTimer(
-    #seconds(3600),
-    _updatePrincipalRecord,
-  );
-  let _updateRewardTokenFeePer1h = Timer.recurringTimer(
-    #seconds(3600),
-    _updateRewardTokenFee,
-  );
+  let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
+  let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(60), _syncPoolMeta);
+  let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(60), _updateStatus);
+  let _updatePrincipalRecordPer1h = Timer.recurringTimer<system>(#seconds(3600), _updatePrincipalRecord);
+  let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(3600), _updateRewardTokenFee);
   // --------------------------- Version Control ------------------------------------
   private var _version : Text = "3.1.0";
   public query func getVersion() : async Text { _version };
