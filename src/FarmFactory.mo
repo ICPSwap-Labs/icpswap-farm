@@ -1,11 +1,6 @@
-import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
-import Debug "mo:base/Debug";
 import Cycles "mo:base/ExperimentalCycles";
 import Error "mo:base/Error";
-import Float "mo:base/Float";
-import HashMap "mo:base/HashMap";
-import Int "mo:base/Int";
 import List "mo:base/List";
 import Time "mo:base/Time";
 import Nat "mo:base/Nat";
@@ -16,11 +11,9 @@ import Int64 "mo:base/Int64";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
-import Iter "mo:base/Iter";
 import CollectionUtils "mo:commons/utils/CollectionUtils";
 import IC0Utils "mo:commons/utils/IC0Utils";
 import SafeUint "mo:commons/math/SafeUint";
-import SafeInt "mo:commons/math/SafeInt";
 import Farm "./Farm";
 import Types "./Types";
 import Prim "mo:⛔";
@@ -99,20 +92,6 @@ shared (initMsg) actor class FarmFactory(
         };
 
         try {
-            // check reward token
-            let rewardPoolAct = actor (Principal.toText(args.rewardPool)) : actor {
-                metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
-            };
-            let rewardPoolMetadata = switch (await rewardPoolAct.metadata()) {
-                case (#ok(poolMetadata)) {
-                    if (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address)) {
-                        throw Error.reject("Illegal SwapPool of reward token");
-                    };
-                };
-                case (#err(code)) {
-                    throw Error.reject("Illegal SwapPool of reward token: " # debug_show (code));
-                };
-            };
             let positionPoolAct = actor (Principal.toText(args.pool)) : actor {
                 metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
             };
@@ -121,7 +100,7 @@ shared (initMsg) actor class FarmFactory(
                 case (#err(code)) { throw Error.reject("Illegal position SwapPool: " # debug_show (code)); };
             };
 
-            Cycles.add(_initCycles);
+            Cycles.add<system>(_initCycles);
             var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
@@ -173,7 +152,7 @@ shared (initMsg) actor class FarmFactory(
         _principalRecordSet := TrieSet.union(_principalRecordSet, principalRecordSet, Principal.equal);
     };
 
-    public shared (msg) func getCycleInfo() : async Result.Result<Types.CycleInfo, Types.Error> {
+    public shared func getCycleInfo() : async Result.Result<Types.CycleInfo, Types.Error> {
         return #ok({
             balance = Cycles.balance();
             available = Cycles.available();
@@ -220,11 +199,11 @@ shared (initMsg) actor class FarmFactory(
         return #ok(_farmDataService.getAllFarmId());
     };
 
-    public query (msg) func getPrincipalRecord() : async Result.Result<[Principal], Types.Error> {
+    public query func getPrincipalRecord() : async Result.Result<[Principal], Types.Error> {
         return #ok(TrieSet.toArray(_principalRecordSet));
     };
 
-    public query (msg) func getTotalAmount() : async Result.Result<{ farmAmount : Nat; principalAmount : Nat; }, Types.Error> {
+    public query func getTotalAmount() : async Result.Result<{ farmAmount : Nat; principalAmount : Nat; }, Types.Error> {
         return #ok({
             farmAmount = _farmDataService.getAllFarmId().size();
             principalAmount = TrieSet.size(_principalRecordSet);
