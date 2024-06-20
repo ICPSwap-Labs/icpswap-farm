@@ -385,6 +385,9 @@ shared (initMsg) actor class Farm(
         return #err(#InternalError("Can not send reward manually before finishing."));
       };
       case (_) {
+        if (_positionIds.size() > 0) {
+          return #err(#InternalError("Please unstake all positions first."));
+        };
         var canisterId = Principal.fromActor(this);
         var preTransIndexBalanceList : Buffer.Buffer<(Principal, (Nat, Nat))> = Buffer.Buffer<(Principal, (Nat, Nat))>(0);
         var insufficientFundList : Buffer.Buffer<(Principal, Nat)> = Buffer.Buffer<(Principal, Nat)>(0);
@@ -486,6 +489,7 @@ shared (initMsg) actor class Farm(
         return #err(#InternalError("Withdraw reward fee failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # "."));
       };
     } else {
+      _totalRewardFee := 0;
       return #err(#InternalError("Withdraw reward fee failed: InsufficientFunds."));
     };
   };
@@ -498,13 +502,16 @@ shared (initMsg) actor class Farm(
     if (_totalRewardFee > 0) {
       return #err(#InternalError("Please withdraw reward fee first."));
     };
+    if (_rewardTokenHolderService.getAllBalances().size() > 0) {
+      return #err(#InternalError("Please send reward back to users first."));
+    };
 
     var nowTime = _getTime();
     var balance = await _rewardTokenAdapter.balanceOf({
       owner = Principal.fromActor(this);
       subaccount = null;
     });
-    if (balance <= _totalRewardBalance) {
+    if (balance < _totalRewardBalance) {
       _errorLogBuffer.add("InsufficientFunds. balance: " # debug_show (balance) # " totalRewardBalance: " # debug_show (_totalRewardBalance) # " . nowTime: " # debug_show (nowTime));
     };
 
@@ -640,7 +647,7 @@ shared (initMsg) actor class Farm(
         return #ok(Buffer.toArray(buffer));
       };
       case (_) {
-        return #err(#InternalError("No position deposited"));
+        return #ok([]);
       };
     };
   };
