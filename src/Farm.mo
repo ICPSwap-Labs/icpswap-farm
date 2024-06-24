@@ -511,9 +511,9 @@ shared (initMsg) actor class Farm(
       owner = Principal.fromActor(this);
       subaccount = null;
     });
-    if (balance < _totalRewardBalance) {
-      _errorLogBuffer.add("InsufficientFunds. balance: " # debug_show (balance) # " totalRewardBalance: " # debug_show (_totalRewardBalance) # " . nowTime: " # debug_show (nowTime));
-    };
+    // if (balance < _totalRewardBalance) {
+    //   _errorLogBuffer.add("InsufficientFunds. balance: " # debug_show (balance) # " totalRewardBalance: " # debug_show (_totalRewardBalance) # " . nowTime: " # debug_show (nowTime));
+    // };
 
     Timer.cancelTimer(_distributeRewardPerCycle);
     Timer.cancelTimer(_syncPoolMetaPer60s);
