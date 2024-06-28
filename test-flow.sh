@@ -15,6 +15,10 @@ cat > dfx.json <<- EOF
       "main": "./src/FarmFeeReceiver.mo",
       "type": "motoko"
     },
+    "FarmIndex": {
+      "main": "./src/FarmIndex.mo",
+      "type": "motoko"
+    },
     "SwapFeeReceiver": {
       "main": ".vessel/icpswap-v3-service/v3.4.2/src/SwapFeeReceiver.mo",
       "type": "motoko"
@@ -116,7 +120,9 @@ dfx canister install PasscodeManager --argument="(principal \"$(dfx canister id 
 echo "==> install FarmFeeReceiver"
 dfx canister install FarmFeeReceiver
 echo "==> install FarmFactory"
-dfx canister install FarmFactory --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null)"
+dfx canister install FarmFactory --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null, principal \"$(dfx canister id FarmIndex)\")"
+echo "==> install FarmIndex"
+dfx canister install FarmIndex --argument="(principal \"$(dfx canister id FarmFactory)\")"
 
 dipAId=`dfx canister id DIP20A`
 dipBId=`dfx canister id DIP20B`
@@ -127,12 +133,14 @@ positionIndexId=`dfx canister id PositionIndex`
 swapFeeReceiverId=`dfx canister id SwapFeeReceiver`
 farmFactoryId=`dfx canister id FarmFactory`
 farmFeeReceiverId=`dfx canister id FarmFeeReceiver`
+farmIndexId=`dfx canister id FarmIndex`
 zeroForOne="true"
 ICP="$(dfx canister id ICRC2)"
 echo "==> infoId (\"$infoId\")"
 echo "==> positionIndexId (\"$positionIndexId\")"
 echo "==> swapFeeReceiverId (\"$swapFeeReceiverId\")"
 echo "==> farmFactoryId (\"$farmFactoryId\")"
+echo "==> farmIndexId (\"$farmFactoryId\")"
 echo "==> ICP (\"$ICP\")"
 
 dfx canister call base_index addClient "(principal \"$swapFactoryId\")"

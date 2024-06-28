@@ -154,7 +154,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     };
 
     private func _checkFarm(farmCid : Principal) : async Bool {
-        switch (await _farmFactoryAct.getAllFarmId()) {
+        switch (await _farmFactoryAct.getAllFarms()) {
             case (#ok(farms)) {
                 for (it in farms.vals()) {
                     if (Principal.equal(farmCid, it)) {

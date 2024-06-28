@@ -7,9 +7,7 @@ import Blob "mo:base/Blob";
 import Debug "mo:base/Debug";
 import Float "mo:base/Float";
 import Nat8 "mo:base/Nat8";
-import Nat32 "mo:base/Nat32";
 import HashMap "mo:base/HashMap";
-import TrieSet "mo:base/TrieSet";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import Time "mo:base/Time";
@@ -53,7 +51,6 @@ shared (initMsg) actor class Farm(
   private stable var _TVL : Types.TVL = {
     poolToken0 = { address = ""; standard = ""; amount = 0; };
     poolToken1 = { address = ""; standard = ""; amount = 0; };
-    rewardToken = { address = initArgs.rewardToken.address; standard = initArgs.rewardToken.standard; amount = initArgs.totalReward; };
   };
 
   // position pool metadata
@@ -92,7 +89,6 @@ shared (initMsg) actor class Farm(
   private var _stakeRecordBuffer : Buffer.Buffer<Types.StakeRecord> = Buffer.Buffer<Types.StakeRecord>(0);
   private stable var _distributeRecordList : [Types.DistributeRecord] = [];
   private var _distributeRecordBuffer : Buffer.Buffer<Types.DistributeRecord> = Buffer.Buffer<Types.DistributeRecord>(0);
-  private stable var _principalRecordSet = TrieSet.empty<Principal>();
 
   let _rewardTokenAdapter = TokenFactory.getAdapter(initArgs.rewardToken.address, initArgs.rewardToken.standard);
   private stable var _swapPoolAct = actor (Principal.toText(initArgs.pool)) : actor {
@@ -103,9 +99,10 @@ shared (initMsg) actor class Farm(
   private stable var _rewardPoolAct = actor (Principal.toText(initArgs.rewardPool)) : actor {
     metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
   };
-  private stable var _farmFactoryAct = actor (Principal.toText(initArgs.farmFactoryCid)) : actor {
-    updateFarmInfo : shared (status : Types.FarmStatus, tvl : Types.TVL) -> async ();
-    updatePrincipalRecord : shared (principalRecord : [Principal]) -> async ();
+  private stable var _farmIndexAct = actor (Principal.toText(initArgs.farmIndexCid)) : actor {
+    updateUserInfo : shared (users : [Principal]) -> async ();
+    updateFarmStatus : shared (status : Types.FarmStatus) -> async ();
+    updateFarmTVL : shared (tvl : Types.TVL) -> async ();
   };
 
   private stable var _inited : Bool = false;
@@ -154,7 +151,6 @@ shared (initMsg) actor class Farm(
     _TVL := {
       poolToken0 = { address = _poolToken0.address; standard = _poolToken0.standard; amount = 0; };
       poolToken1 = { address = _poolToken1.address; standard = _poolToken1.standard; amount = 0; };
-      rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
     };
 
     _inited := true;
@@ -188,7 +184,7 @@ shared (initMsg) actor class Farm(
     };
     let positionTokenAmounts = switch (_getTokenAmountByLiquidity(positionInfo.tickLower, positionInfo.tickUpper, positionInfo.liquidity)) {
       case (#ok(result)) { result };
-      case (#err(msg)) { { amount0 = 0; amount1 = 0 } };
+      case (#err(_)) { { amount0 = 0; amount1 = 0 } };
     };
     if (_token0AmountLimit != 0 and positionTokenAmounts.amount0 < _token0AmountLimit) {
       return #err(#InternalError(
@@ -234,16 +230,19 @@ shared (initMsg) actor class Farm(
             token1Amount = positionTokenAmounts.amount1;
           },
         );
+        // update TVL
+        _TVL := {
+          poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = _TVL.poolToken0.amount + IntUtils.toNat(positionTokenAmounts.amount0, 512); };
+          poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = _TVL.poolToken1.amount + IntUtils.toNat(positionTokenAmounts.amount1, 512); };
+        };
 
+        // update position id
         var tempGlobalPositionIds = Buffer.Buffer<Nat>(0);
         for (z in _positionIds.vals()) { tempGlobalPositionIds.add(z) };
         tempGlobalPositionIds.add(positionId);
         _positionIds := Buffer.toArray(tempGlobalPositionIds);
 
         _totalLiquidity := _totalLiquidity + positionInfo.liquidity;
-
-        // principle record        
-        _principalRecordSet := TrieSet.put<Principal>(_principalRecordSet, msg.caller, _hashPrincipal(msg.caller), Principal.equal);
 
         // stake record
         _stakeRecordBuffer.add({
@@ -314,7 +313,23 @@ shared (initMsg) actor class Farm(
           case (_) {};
         };
         _positionIds := CollectionUtils.arrayRemove<Nat>(_positionIds, positionId, Types.equal);
+
         _depositMap.delete(positionId);
+
+        /**
+          This involves uncertain changes in the amount of tokens due to pool price changes, 
+          so if it is determined that something will go wrong with subtraction, 
+          drop this part of the TVL update and wait for a uniform update at distribution.
+        */
+        // update TVL
+        let token0Amount = IntUtils.toNat(deposit.token0Amount, 512);
+        let token1Amount = IntUtils.toNat(deposit.token1Amount, 512);
+        if (_TVL.poolToken0.amount >= token0Amount and _TVL.poolToken1.amount >= token1Amount) {
+          _TVL := {
+            poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = _TVL.poolToken0.amount - token0Amount; };
+            poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = _TVL.poolToken1.amount - token1Amount; };
+          };
+        };
 
         return #ok("Unstaked successfully");
       };
@@ -364,14 +379,14 @@ shared (initMsg) actor class Farm(
   public shared (msg) func finishManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #FINISHED;
-    await _farmFactoryAct.updateFarmInfo(_status, _TVL);
+    await _farmIndexAct.updateFarmStatus(_status);
     return #ok("Finish farm successfully");
   };
 
   public shared (msg) func restartManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #LIVE;
-    await _farmFactoryAct.updateFarmInfo(_status, _TVL);
+    await _farmIndexAct.updateFarmStatus(_status);
     return #ok("Restart farm successfully");
   };
 
@@ -511,29 +526,25 @@ shared (initMsg) actor class Farm(
       owner = Principal.fromActor(this);
       subaccount = null;
     });
-    // if (balance < _totalRewardBalance) {
-    //   _errorLogBuffer.add("InsufficientFunds. balance: " # debug_show (balance) # " totalRewardBalance: " # debug_show (_totalRewardBalance) # " . nowTime: " # debug_show (nowTime));
-    // };
 
     Timer.cancelTimer(_distributeRewardPerCycle);
     Timer.cancelTimer(_syncPoolMetaPer60s);
     Timer.cancelTimer(_updateStatusPer60s);
-    Timer.cancelTimer(_updatePrincipalRecordPer1h);
+    Timer.cancelTimer(_updateUserInfoPer120s);
+    Timer.cancelTimer(_updateTVLPer10m);
+    Timer.cancelTimer(_updateRewardTokenFeePer1h);
 
     if (balance > _rewardTokenFee) {
       var amount = balance - _rewardTokenFee;
       try {
         switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.refunder; subaccount = null }; amount = amount; fee = ?_totalRewardFee; memo = null; created_at_time = null })) {
           case (#Ok(index)) {
-            await _farmFactoryAct.updateFarmInfo(
-              #CLOSED,
-              {
-                poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
-                poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
-                rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
-              },
-            );
-            await _farmFactoryAct.updatePrincipalRecord(TrieSet.toArray(_principalRecordSet));
+            await _farmIndexAct.updateFarmStatus(#CLOSED);
+            await _farmIndexAct.updateFarmTVL({
+              poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
+              poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
+            });
+            await _farmIndexAct.updateUserInfo(Iter.toArray(_userPositionMap.keys()));
             _stakeRecordBuffer.add({
               timestamp = nowTime;
               transType = #harvest;
@@ -548,7 +559,6 @@ shared (initMsg) actor class Farm(
             _TVL := {
               poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
               poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
-              rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
             };
           };
           case (#Err(code)) {
@@ -559,21 +569,17 @@ shared (initMsg) actor class Farm(
         _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . Msg: " # debug_show (Error.message(e)) # ".");
       };
     } else {
-      await _farmFactoryAct.updateFarmInfo(
-        #CLOSED,
-        {
-          poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
-          poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
-          rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
-        },
-      );
-      await _farmFactoryAct.updatePrincipalRecord(TrieSet.toArray(_principalRecordSet));
+      await _farmIndexAct.updateFarmStatus(#CLOSED);
+      await _farmIndexAct.updateFarmTVL({
+        poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
+        poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
+      });
+      await _farmIndexAct.updateUserInfo(Iter.toArray(_userPositionMap.keys()));
       _totalRewardBalance := 0;
       _status := #CLOSED;
       _TVL := {
         poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
         poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
-        rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
       };
     };
 
@@ -735,10 +741,6 @@ shared (initMsg) actor class Farm(
     return #ok(_TVL);
   };
 
-  public query (msg) func getPrincipalRecord() : async Result.Result<[Principal], Types.Error> {
-    return #ok(TrieSet.toArray(_principalRecordSet));
-  };
-
   public query func getInitArgs() : async Result.Result<Types.InitFarmArgs, Types.Error> {
     return #ok(initArgs);
   };
@@ -770,7 +772,18 @@ shared (initMsg) actor class Farm(
     });
   };
 
-  public query func getRewardMeta() : async Result.Result<{ totalReward : Nat; totalRewardHarvested : Nat; totalRewardUnharvested : Nat; totalRewardBalance : Nat; totalRewardFee : Nat; secondPerCycle : Nat; rewardPerCycle : Nat; currentCycleCount : Nat; totalCycleCount : Nat }, Types.Error> {
+  public query func getRewardMeta() : async Result.Result<{ 
+    totalReward : Nat; 
+    totalRewardHarvested : Nat; 
+    totalRewardUnharvested : Nat; 
+    totalRewardBalance : Nat; 
+    totalRewardFee : Nat; 
+    secondPerCycle : Nat; 
+    rewardPerCycle : Nat; 
+    currentCycleCount : Nat; 
+    totalCycleCount : Nat;
+    rewardTokenFee : Nat; 
+  }, Types.Error> {
     return #ok({
       totalReward = _totalReward;
       totalRewardHarvested = _totalRewardHarvested;
@@ -781,6 +794,7 @@ shared (initMsg) actor class Farm(
       rewardPerCycle = _rewardPerCycle;
       currentCycleCount = _currentCycleCount;
       totalCycleCount = _totalCycleCount;
+      rewardTokenFee = _rewardTokenFee;
     });
   };
 
@@ -927,12 +941,17 @@ shared (initMsg) actor class Farm(
     if (_status == #FINISHED and (_totalRewardBalance == 0 and _positionIds.size() == 0)) {
       _status := #CLOSED;
     };
-    await _farmFactoryAct.updateFarmInfo(_status, _TVL);
+    await _farmIndexAct.updateFarmStatus(_status);
   };
 
-  private func _updatePrincipalRecord() : async () {
-    Debug.print(" ---> _updatePrincipalRecord ");
-    await _farmFactoryAct.updatePrincipalRecord(TrieSet.toArray(_principalRecordSet));
+  private func _updateUserInfo() : async () {
+    Debug.print(" ---> _updateUserInfo ");
+    await _farmIndexAct.updateUserInfo(Iter.toArray(_userPositionMap.keys()));
+  };
+
+  private func _updateTVL() : async () {
+    Debug.print(" ---> _updateTVL ");
+    await _farmIndexAct.updateFarmTVL(_TVL);
   };
 
   private func _syncPoolMeta() : async () {
@@ -1051,7 +1070,6 @@ shared (initMsg) actor class Farm(
       _TVL := {
         poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = _poolToken0Amount; };
         poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = _poolToken1Amount; };
-        rewardToken = { address = _TVL.rewardToken.address; standard = _TVL.rewardToken.standard; amount = _TVL.rewardToken.amount; };
       };
     } catch (e) {
       _errorLogBuffer.add("_distributeReward failed " # debug_show (Error.message(e)) # " . nowTime: " # debug_show (_getTime()));
@@ -1139,10 +1157,6 @@ shared (initMsg) actor class Farm(
       Nat8.fromIntWrap(n / 2 ** shift)
     };
     return Array.tabulate<Nat8>(len, ith_byte);
-  };
-
-  private func _hashPrincipal(key : Principal) : Nat32 {
-    Prim.hashBlob(Prim.encodeUtf8(Principal.toText(key))) & 0x3fffffff;
   };
 
   // --------------------------- ACL ------------------------------------
@@ -1239,7 +1253,8 @@ shared (initMsg) actor class Farm(
   let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
   let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(60), _syncPoolMeta);
   let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(60), _updateStatus);
-  let _updatePrincipalRecordPer1h = Timer.recurringTimer<system>(#seconds(3600), _updatePrincipalRecord);
+  let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(120), _updateUserInfo);
+  let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(600), _updateTVL);
   let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(3600), _updateRewardTokenFee);
   // --------------------------- Version Control ------------------------------------
   private var _version : Text = "3.1.0";
