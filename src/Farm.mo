@@ -1250,20 +1250,20 @@ shared (initMsg) actor class Farm(
   };
 
   // --------------------------- SCHEDULE ------------------------------------
-  // let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
-  // let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(60), _syncPoolMeta);
-  // let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(60), _updateStatus);
-  // let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(120), _updateUserInfo);
-  // let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(600), _updateTVL);
-  // let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(3600), _updateRewardTokenFee);
+  let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
+  let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(60), _syncPoolMeta);
+  let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(60), _updateStatus);
+  let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(120), _updateUserInfo);
+  let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(600), _updateTVL);
+  let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(3600), _updateRewardTokenFee);
   
   // for testing
-  let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
-  let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(10), _syncPoolMeta);
-  let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(10), _updateStatus);
-  let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(10), _updateUserInfo);
-  let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(10), _updateTVL);
-  let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(10), _updateRewardTokenFee);
+  // let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
+  // let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(10), _syncPoolMeta);
+  // let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(10), _updateStatus);
+  // let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(10), _updateUserInfo);
+  // let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(10), _updateTVL);
+  // let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(10), _updateRewardTokenFee);
   // --------------------------- Version Control ------------------------------------
   private var _version : Text = "3.2.0";
   public query func getVersion() : async Text { _version };
