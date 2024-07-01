@@ -3,7 +3,6 @@ import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Int64 "mo:base/Int64";
 import Time "mo:base/Time";
-import Error "mo:base/Error";
 import Bool "mo:base/Bool";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
