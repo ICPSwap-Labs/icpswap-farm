@@ -48,11 +48,13 @@ shared (initMsg) actor class FarmIndex(
             return;
         };
         for (user in users.vals()) {
-            var tempFarmIds : Buffer.Buffer<Principal> = Buffer.Buffer<Principal>(0);
+            var tempFarmIds = TrieSet.empty<Principal>();
             var currentFarmIdList = switch (_userFarms.get(user)) { case (?list) { list }; case (_) { [] }; };
-            for (z in currentFarmIdList.vals()) { tempFarmIds.add(z) };
-            tempFarmIds.add(msg.caller);
-            _userFarms.put(user, Buffer.toArray(tempFarmIds));
+            for (z in currentFarmIdList.vals()) {
+                tempFarmIds := TrieSet.put<Principal>(tempFarmIds, z, Principal.hash(z), Principal.equal);
+            };
+            tempFarmIds := TrieSet.put<Principal>(tempFarmIds, msg.caller, Principal.hash(msg.caller), Principal.equal);
+            _userFarms.put(user, TrieSet.toArray(tempFarmIds));
 
             _principalRecordSet := TrieSet.put<Principal>(_principalRecordSet, user, Principal.hash(user), Principal.equal);
         };
@@ -156,11 +158,62 @@ shared (initMsg) actor class FarmIndex(
         };
     };
 
-    public query func getUserPools(user : Principal) : async Result.Result<[Principal], Types.Error> {
+    public query func getAllFarms() : async Result.Result<{
+        NOT_STARTED : [Principal];
+        LIVE : [Principal];
+        FINISHED : [Principal];
+        CLOSED : [Principal];
+    }, Text> {
+        return #ok({
+            NOT_STARTED = TrieSet.toArray(_notStartedFarmSet);
+            LIVE = TrieSet.toArray(_liveFarmSet);
+            FINISHED = TrieSet.toArray(_finishedFarmSet);
+            CLOSED = TrieSet.toArray(_closedFarmSet);
+        });
+    };
+
+    public query func getUserFarms(user : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_userFarms.get(user)) {
             case (?farmArray) { return #ok(farmArray); };
             case (_) { return #ok([]); };
         };
+    };
+
+    public query func getAllUserFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
+        return #ok(Iter.toArray(_userFarms.entries()));
+    };
+
+    public query func getFarmUsers(farm : Principal) : async Result.Result<[Principal], Types.Error> {
+        switch (_farmUsers.get(farm)) {
+            case (?userArray) { return #ok(userArray); };
+            case (_) { return #ok([]); };
+        };
+    };
+
+    public query func getAllFarmUsers() : async Result.Result<[(Principal, [Principal])], Types.Error> {
+        return #ok(Iter.toArray(_farmUsers.entries()));
+    };
+
+    public query func getFarmsByPoolKey(poolKey : Text) : async Result.Result<[Principal], Types.Error> {
+        switch (_poolKeyFarms.get(poolKey)) {
+            case (?farmArray) { return #ok(farmArray); };
+            case (_) { return #ok([]); };
+        };
+    };
+
+    public query func getAllPoolKeyFarms() : async Result.Result<[(Text, [Principal])], Types.Error> {
+        return #ok(Iter.toArray(_poolKeyFarms.entries()));
+    };
+
+    public query func getFarmsByRewardToken(rewardToken : Principal) : async Result.Result<[Principal], Types.Error> {
+        switch (_rewardTokenFarms.get(rewardToken)) {
+            case (?farmArray) { return #ok(farmArray); };
+            case (_) { return #ok([]); };
+        };
+    };
+
+    public query func getAllRewardTokenFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
+        return #ok(Iter.toArray(_rewardTokenFarms.entries()));
     };
 
     public query func getPrincipalRecord() : async Result.Result<[Principal], Types.Error> {
@@ -172,6 +225,11 @@ shared (initMsg) actor class FarmIndex(
             farmAmount = _farms.size();
             principalAmount = TrieSet.size(_principalRecordSet);
         });
+    };
+
+    public query func getFarmRewardTokenInfo(farm : Principal) : async Result.Result<Types.FarmRewardInfo, Types.Error> {
+        switch (_farmRewardInfos.get(farm)) {
+            case (?info) { #ok(info); }; case (_) { return #err(#InternalError("No such Farm.")); }; };
     };
 
     public query func getFarmRewardTokenInfos(status : ?Types.FarmStatus) : async Result.Result<[(Principal, Types.FarmRewardInfo)], Types.Error> {
@@ -229,7 +287,7 @@ shared (initMsg) actor class FarmIndex(
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.1.0";
+    private var _version : Text = "3.2.0";
     public query func getVersion() : async Text { _version };
 
     system func preupgrade() {

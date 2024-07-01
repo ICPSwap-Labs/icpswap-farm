@@ -20,58 +20,58 @@ cat > dfx.json <<- EOF
       "type": "motoko"
     },
     "SwapFeeReceiver": {
-      "main": ".vessel/icpswap-v3-service/v3.4.2/src/SwapFeeReceiver.mo",
+      "main": ".vessel/icpswap-v3-service/v3.4.4/src/SwapFeeReceiver.mo",
       "type": "motoko"
     },
     "SwapFactory": {
-      "main": ".vessel/icpswap-v3-service/v3.4.2/src/SwapFactory.mo",
+      "main": ".vessel/icpswap-v3-service/v3.4.4/src/SwapFactory.mo",
       "type": "motoko"
     },
     "PasscodeManager": {
-      "main": ".vessel/icpswap-v3-service/v3.4.2/src/PasscodeManager.mo",
+      "main": ".vessel/icpswap-v3-service/v3.4.4/src/PasscodeManager.mo",
       "type": "motoko"
     },
     "PositionIndex": {
-      "main": ".vessel/icpswap-v3-service/v3.4.2/src/PositionIndex.mo",
+      "main": ".vessel/icpswap-v3-service/v3.4.4/src/PositionIndex.mo",
       "type": "motoko"
     },
     "TrustedCanisterManager": {
-      "main": ".vessel/icpswap-v3-service/v3.4.2/src/TrustedCanisterManager.mo",
+      "main": ".vessel/icpswap-v3-service/v3.4.4/src/TrustedCanisterManager.mo",
       "type": "motoko"
     },
     "Test": {
-      "main": ".vessel/icpswap-v3-service/v3.4.2/test/Test.mo",
+      "main": ".vessel/icpswap-v3-service/v3.4.4/test/Test.mo",
       "type": "motoko"
     },
     "DIP20A": {
-      "wasm": ".vessel/icpswap-v3-service/v3.4.2/test/dip20/lib.wasm",
+      "wasm": ".vessel/icpswap-v3-service/v3.4.4/test/dip20/lib.wasm",
       "type": "custom",
-      "candid": ".vessel/icpswap-v3-service/v3.4.2/test/dip20/lib.did"
+      "candid": ".vessel/icpswap-v3-service/v3.4.4/test/dip20/lib.did"
     },
     "DIP20B": {
-      "wasm": ".vessel/icpswap-v3-service/v3.4.2/test/dip20/lib.wasm",
+      "wasm": ".vessel/icpswap-v3-service/v3.4.4/test/dip20/lib.wasm",
       "type": "custom",
-      "candid": ".vessel/icpswap-v3-service/v3.4.2/test/dip20/lib.did"
+      "candid": ".vessel/icpswap-v3-service/v3.4.4/test/dip20/lib.did"
     },
     "ICRC2": {
-      "wasm": ".vessel/icpswap-v3-service/v3.4.2/test/icrc2/icrc2.wasm",
+      "wasm": ".vessel/icpswap-v3-service/v3.4.4/test/icrc2/icrc2.wasm",
       "type": "custom",
-      "candid": ".vessel/icpswap-v3-service/v3.4.2/test/icrc2/icrc2.did"
+      "candid": ".vessel/icpswap-v3-service/v3.4.4/test/icrc2/icrc2.did"
     },
     "base_index": {
-      "wasm": ".vessel/icpswap-v3-service/v3.4.2/test/base_index/base_index.wasm",
+      "wasm": ".vessel/icpswap-v3-service/v3.4.4/test/base_index/base_index.wasm",
       "type": "custom",
-      "candid": ".vessel/icpswap-v3-service/v3.4.2/test/base_index/base_index.did"
+      "candid": ".vessel/icpswap-v3-service/v3.4.4/test/base_index/base_index.did"
     },
     "node_index": {
-      "wasm": ".vessel/icpswap-v3-service/v3.4.2/test/node_index/node_index.wasm",
+      "wasm": ".vessel/icpswap-v3-service/v3.4.4/test/node_index/node_index.wasm",
       "type": "custom",
-      "candid": ".vessel/icpswap-v3-service/v3.4.2/test/node_index/node_index.did"
+      "candid": ".vessel/icpswap-v3-service/v3.4.4/test/node_index/node_index.did"
     },
     "price": {
-      "wasm": ".vessel/icpswap-v3-service/v3.4.2/test/price/price.wasm",
+      "wasm": ".vessel/icpswap-v3-service/v3.4.4/test/price/price.wasm",
       "type": "custom",
-      "candid": ".vessel/icpswap-v3-service/v3.4.2/test/price/price.did"
+      "candid": ".vessel/icpswap-v3-service/v3.4.4/test/price/price.did"
     }
   },
   "defaults": { "build": { "packtool": "vessel sources" } }, "networks": { "local": { "bind": "127.0.0.1:8000", "type": "ephemeral" } }, "version": 1
@@ -116,7 +116,7 @@ dfx canister deposit-cycles 50698725619460 SwapFactory
 echo "==> install PositionIndex"
 dfx canister install PositionIndex --argument="(principal \"$(dfx canister id SwapFactory)\")"
 echo "==> install PasscodeManager"
-dfx canister install PasscodeManager --argument="(principal \"$(dfx canister id ICRC2)\", 100000000, principal \"$(dfx canister id SwapFactory)\")"
+dfx canister install PasscodeManager --argument="(principal \"$(dfx canister id ICRC2)\", 100000000, principal \"$(dfx canister id SwapFactory)\", principal \"$MINTER_PRINCIPAL\")"
 echo "==> install FarmFeeReceiver"
 dfx canister install FarmFeeReceiver
 echo "==> install FarmFactory"
@@ -144,7 +144,6 @@ echo "==> farmIndexId (\"$farmFactoryId\")"
 echo "==> ICP (\"$ICP\")"
 
 dfx canister call base_index addClient "(principal \"$swapFactoryId\")"
-
 
 if [[ "$dipAId" < "$dipBId" ]]; then
     token0="$dipAId"

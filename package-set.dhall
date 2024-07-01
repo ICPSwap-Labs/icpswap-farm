@@ -24,7 +24,7 @@ let
       ,{ dependencies = [] : List Text
       , name = "icpswap-v3-service"
       , repo = "git@github.com:ICPSwap-Labs/icpswap-v3-service.git"
-      , version = "v3.4.2"
+      , version = "v3.4.4"
       }
     ]
 let
