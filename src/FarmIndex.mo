@@ -157,9 +157,6 @@ shared (initMsg) actor class FarmIndex(
         );
     };
 
-    // sync old farm tvl and reward info
-    // sync old farm principal info
-
     public query func getFarms(status : ?Types.FarmStatus) : async Result.Result<[Principal], Text> {
         switch (status) {
             case (? #NOT_STARTED) { return #ok(TrieSet.toArray(_notStartedFarmSet)); };
@@ -372,4 +369,100 @@ shared (initMsg) actor class FarmIndex(
     // }) : Bool {
     //     return switch (msg) { };
     // };
+
+    // Sync old farm tvl and reward info, remove after initialization of the data
+    public shared (msg) func syncHisData(farmCid : Principal, initTime : Nat) : async Text {
+        assert (Prim.isController(msg.caller));
+
+        let farmAct = actor (Principal.toText(farmCid)) : actor {
+            // reward token info and reward token amount 
+            getFarmInfo : query (user : Text) -> async Result.Result<{
+                rewardToken : Types.Token;
+                pool : Principal;
+                poolToken0 : Types.Token;
+                poolToken1 : Types.Token;
+                poolFee : Nat;
+                startTime : Nat;
+                endTime : Nat;
+                refunder : Principal;
+                totalReward : Nat;
+                totalRewardBalance : Nat;
+                totalRewardHarvested : Nat;
+                totalRewardUnharvested : Nat;
+                numberOfStakes : Nat;
+                userNumberOfStakes : Nat;
+                status : Types.FarmStatus;
+                creator : Principal;
+                positionIds : [Nat];
+            }, Types.Error>;
+            // farm principal record
+            getStakeRecord : query (offset : Nat, limit : Nat, from : Text) -> async Result.Result<Types.Page<Types.StakeRecord>, Text>;
+        };
+        var principalSet = TrieSet.empty<Principal>();
+        switch (await farmAct.getStakeRecord(0, 100000, "")) {
+            case (#ok(stakeRecord)) {
+                for (r in stakeRecord.content.vals()) {
+                    if (r.transType == #stake) {
+                        principalSet := TrieSet.put<Principal>(principalSet, r.from, Principal.hash(r.from), Principal.equal);
+                    };
+                };
+            };
+            case (#err(msg)) { };
+        };
+
+        switch (await farmAct.getFarmInfo("")) {
+            case (#ok(info)) {
+                var tempFarmIds = Buffer.Buffer<Principal>(0);
+                for (z in _farms.vals()) { tempFarmIds.add(z) };
+                tempFarmIds.add(farmCid);
+                _farms := Buffer.toArray(tempFarmIds);
+
+                let poolKey = info.poolToken0.address # "_" # info.poolToken1.address # "_" # Nat.toText(info.poolFee);
+                tempFarmIds := Buffer.Buffer<Principal>(0);
+                var poolKeyFarmIds = switch (_poolKeyFarms.get(poolKey)) { case (?list) { list }; case (_) { [] }; };
+                for (z in poolKeyFarmIds.vals()) { tempFarmIds.add(z) };
+                tempFarmIds.add(farmCid);
+                _poolKeyFarms.put(poolKey, Buffer.toArray(tempFarmIds));
+
+                tempFarmIds := Buffer.Buffer<Principal>(0);
+                var rewardTokenFarmIds = switch (_rewardTokenFarms.get(Principal.fromText(info.rewardToken.address))) {
+                    case (?list) { list }; case (_) { [] };
+                };
+                for (z in rewardTokenFarmIds.vals()) { tempFarmIds.add(z) };
+                tempFarmIds.add(farmCid);
+                _rewardTokenFarms.put(Principal.fromText(info.rewardToken.address), Buffer.toArray(tempFarmIds));
+
+                _farmRewardInfos.put(
+                    farmCid,
+                    {
+                        initTime = initTime;
+                        poolToken0TVL = {
+                            address = Principal.fromText(info.poolToken0.address);
+                            standard = info.poolToken0.standard;
+                            amount = 0;
+                        };
+                        poolToken1TVL = {
+                            address = Principal.fromText(info.poolToken1.address);
+                            standard = info.poolToken1.standard;
+                            amount = 0;
+                        };
+                        totalReward = {
+                            address = Principal.fromText(info.rewardToken.address);
+                            standard = info.rewardToken.standard;
+                            amount = info.totalReward;
+                        };
+                    },
+                );
+
+                _closedFarmSet := TrieSet.put<Principal>(_closedFarmSet, farmCid, Principal.hash(farmCid), Principal.equal);
+                _principalRecordSet := TrieSet.union<Principal>(_principalRecordSet, principalSet, Principal.equal);
+
+                return "ok";
+            };
+            case (#err(msg)) {
+                return debug_show(msg);
+            };
+        };
+    };
+
 };
