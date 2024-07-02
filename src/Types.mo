@@ -167,6 +167,11 @@ module {
         rewardToken : Token;
         totalReward : Nat;
     };
+    public type SearchCondition = {
+        rewardToken : ?Principal;
+        poolKey : ?Text;
+        user : ?Principal;
+    };
     public type SwapPositionInfo = {
         pool : Text;
         token0 : Token;
