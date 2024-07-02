@@ -1,8 +1,6 @@
 import Bool "mo:base/Bool";
 import Time "mo:base/Time";
 import Int "mo:base/Int";
-import Buffer "mo:base/Buffer";
-import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
@@ -78,6 +76,7 @@ module {
         creator : Principal;
         farmFactoryCid : Principal;
         feeReceiverCid : Principal;
+        farmIndexCid : Principal;
         fee : Nat;
         governanceCid : ?Principal;
     };
@@ -138,6 +137,12 @@ module {
         creator : Principal;
         positionIds : [Nat];
     };
+    public type FarmRewardInfo = {
+        initTime : Nat;
+        poolToken0TVL : { address : Principal; standard : Text; amount : Nat; };
+        poolToken1TVL : { address : Principal; standard : Text; amount : Nat; };
+        totalReward : { address : Principal; standard : Text; amount : Nat; };
+    };
     public type TransType = {
         #stake;
         #unstake;
@@ -153,7 +158,19 @@ module {
     public type TVL = {
         poolToken0 : TokenAmount;
         poolToken1 : TokenAmount;
-        rewardToken : TokenAmount;
+    };
+    public type AddFarmIndexArgs = {
+        farmId : Principal;
+        poolKey : Text;
+        poolToken0 : Token;
+        poolToken1 : Token;
+        rewardToken : Token;
+        totalReward : Nat;
+    };
+    public type SearchCondition = {
+        rewardToken : ?Principal;
+        poolKey : ?Text;
+        user : ?Principal;
     };
     public type SwapPositionInfo = {
         pool : Text;
@@ -212,15 +229,12 @@ module {
         #getFarms : () -> ?FarmStatus;
         #getFee : () -> ();
         #getInitArgs : () -> ();
-        #getPrincipalRecord : () -> ();
-        #getTotalAmount : () -> ();
         #getVersion : () -> ();
         #removeFarmControllers : () -> (Principal, [Principal]);
         #setAdmins : () -> [Principal];
         #setFarmAdmins : () -> (Principal, [Principal]);
         #setFee : () -> Nat;
         #updateFarmInfo : () -> (FarmStatus, TVL);
-        #updatePrincipalRecord : () -> [Principal];
     };
     public type FarmMsg = {
         #clearErrorLog : () -> ();
@@ -274,7 +288,7 @@ module {
         setAdmins : shared [Principal] -> async ();
         getAdmins : query () -> async Result.Result<[Principal], Error>;
         getCycleInfo : shared () -> async Result.Result<CycleInfo, Error>;
-        getAllFarmId : query () -> async Result.Result<[Principal], Error>;
+        getAllFarms : query () -> async Result.Result<[Principal], Error>;
     };
 
     public type IFarm = actor {

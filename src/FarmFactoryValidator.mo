@@ -145,7 +145,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.1.0";
+    private var _version : Text = "3.2.0";
     public query func getVersion() : async Text { _version };
 
     private func _getTime() : Nat {
@@ -153,7 +153,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     };
 
     private func _checkFarm(farmCid : Principal) : async Bool {
-        switch (await _farmFactoryAct.getAllFarmId()) {
+        switch (await _farmFactoryAct.getAllFarms()) {
             case (#ok(farms)) {
                 for (it in farms.vals()) {
                     if (Principal.equal(farmCid, it)) {
