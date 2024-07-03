@@ -370,7 +370,7 @@ shared (initMsg) actor class FarmIndex(
     //     return switch (msg) { };
     // };
 
-    // Sync old farm tvl and reward info, remove after initialization of the data
+    // sync old farm tvl and reward info, remove after initialization of the data
     public shared (msg) func syncHisData(farmCid : Principal, initTime : Nat) : async Text {
         assert (Prim.isController(msg.caller));
 
