@@ -480,7 +480,7 @@ shared (initMsg) actor class Farm(
       let totalRewardFee = _totalRewardFee;
       var amount = _totalRewardFee - _rewardTokenFee;
       try {
-        switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.feeReceiverCid; subaccount = null }; amount = amount; fee = ?_totalRewardFee; memo = null; created_at_time = null })) {
+        switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.feeReceiverCid; subaccount = null }; amount = amount; fee = ?_rewardTokenFee; memo = null; created_at_time = null })) {
           case (#Ok(index)) {
             _stakeRecordBuffer.add({
               timestamp = nowTime;
