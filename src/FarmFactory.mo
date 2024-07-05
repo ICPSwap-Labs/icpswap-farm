@@ -101,8 +101,8 @@ shared (initMsg) actor class FarmFactory(
             await farmActor.init();
             // update farm index
             await _farmIndexAct.addFarmIndex({
-                farmId = farm;
-                poolKey = positionPoolMetadata.key;
+                farmCid = farm;
+                poolCid = args.pool;
                 poolToken0 = positionPoolMetadata.token0;
                 poolToken1 = positionPoolMetadata.token1;
                 rewardToken = args.rewardToken;

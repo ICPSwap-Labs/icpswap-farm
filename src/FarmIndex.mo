@@ -36,8 +36,8 @@ shared (initMsg) actor class FarmIndex(
     private stable var _farmUserEntries : [(Principal, [Principal])] = [];
     private var _farmUsers : HashMap.HashMap<Principal, [Principal]> = HashMap.fromIter<Principal, [Principal]>(_farmUserEntries.vals(), 0, Principal.equal, Principal.hash);
 
-    private stable var _poolKeyFarmEntries : [(Text, [Principal])] = [];
-    private var _poolKeyFarms : HashMap.HashMap<Text, [Principal]> = HashMap.fromIter<Text, [Principal]>(_poolKeyFarmEntries.vals(), 0, Text.equal, Text.hash);
+    private stable var _poolFarmEntries : [(Principal, [Principal])] = [];
+    private var _poolFarms : HashMap.HashMap<Principal, [Principal]> = HashMap.fromIter<Principal, [Principal]>(_poolFarmEntries.vals(), 0, Principal.equal, Principal.hash);
 
     private stable var _rewardTokenFarmEntries : [(Principal, [Principal])] = [];
     private var _rewardTokenFarms : HashMap.HashMap<Principal, [Principal]> = HashMap.fromIter<Principal, [Principal]>(_rewardTokenFarmEntries.vals(), 0, Principal.equal, Principal.hash);
@@ -94,6 +94,7 @@ shared (initMsg) actor class FarmIndex(
                     msg.caller,
                     {
                         initTime = info.initTime;
+                        pool = info.pool;
                         poolToken0TVL = {
                             address = Principal.fromText(tvl.poolToken0.address);
                             standard = tvl.poolToken0.standard;
@@ -117,27 +118,30 @@ shared (initMsg) actor class FarmIndex(
 
         var tempFarmIds = Buffer.Buffer<Principal>(0);
         for (z in _farms.vals()) { tempFarmIds.add(z) };
-        tempFarmIds.add(input.farmId);
+        tempFarmIds.add(input.farmCid);
         _farms := Buffer.toArray(tempFarmIds);
 
+        _notStartedFarmSet := TrieSet.put<Principal>(_notStartedFarmSet, input.farmCid, Principal.hash(input.farmCid), Principal.equal);
+
         tempFarmIds := Buffer.Buffer<Principal>(0);
-        var poolKeyFarmIds = switch (_poolKeyFarms.get(input.poolKey)) { case (?list) { list }; case (_) { [] }; };
-        for (z in poolKeyFarmIds.vals()) { tempFarmIds.add(z) };
-        tempFarmIds.add(input.farmId);
-        _poolKeyFarms.put(input.poolKey, Buffer.toArray(tempFarmIds));
+        var poolFarmIds = switch (_poolFarms.get(input.poolCid)) { case (?list) { list }; case (_) { [] }; };
+        for (z in poolFarmIds.vals()) { tempFarmIds.add(z) };
+        tempFarmIds.add(input.farmCid);
+        _poolFarms.put(input.poolCid, Buffer.toArray(tempFarmIds));
 
         tempFarmIds := Buffer.Buffer<Principal>(0);
         var rewardTokenFarmIds = switch (_rewardTokenFarms.get(Principal.fromText(input.rewardToken.address))) {
             case (?list) { list }; case (_) { [] };
         };
         for (z in rewardTokenFarmIds.vals()) { tempFarmIds.add(z) };
-        tempFarmIds.add(input.farmId);
+        tempFarmIds.add(input.farmCid);
         _rewardTokenFarms.put(Principal.fromText(input.rewardToken.address), Buffer.toArray(tempFarmIds));
 
         _farmRewardInfos.put(
-            input.farmId,
+            input.farmCid,
             {
                 initTime = _getTime();
+                pool = input.poolCid;
                 poolToken0TVL = {
                     address = Principal.fromText(input.poolToken0.address);
                     standard = input.poolToken0.standard;
@@ -198,15 +202,67 @@ shared (initMsg) actor class FarmIndex(
         return #ok(Iter.toArray(_farmUsers.entries()));
     };
 
-    public query func getFarmsByPoolKey(poolKey : Text) : async Result.Result<[Principal], Types.Error> {
-        switch (_poolKeyFarms.get(poolKey)) {
+    public query func getFarmsByPool(pool : Principal) : async Result.Result<[Principal], Types.Error> {
+        switch (_poolFarms.get(pool)) {
             case (?farmArray) { return #ok(farmArray) };
             case (_) { return #ok([]) };
         };
     };
 
-    public query func getAllPoolKeyFarms() : async Result.Result<[(Text, [Principal])], Types.Error> {
-        return #ok(Iter.toArray(_poolKeyFarms.entries()));
+    public query func getRewardInfoByStatus(status : Types.FarmStatus) : async Result.Result<[Types.FarmRewardInfo], Types.Error> {
+        var rewardInfos = Buffer.Buffer<Types.FarmRewardInfo>(0);
+        switch (status) {
+            case (#NOT_STARTED) {
+                for (farm in TrieSet.toArray(_notStartedFarmSet).vals()) {
+                    switch (_farmRewardInfos.get(farm)) { case (?info) { rewardInfos.add(info); }; case (_) {}; };
+                };
+            };
+            case (#LIVE) {
+                for (farm in TrieSet.toArray(_liveFarmSet).vals()) {
+                    switch (_farmRewardInfos.get(farm)) { case (?info) { rewardInfos.add(info); }; case (_) {}; };
+                };
+            };
+            case (#FINISHED) {
+                for (farm in TrieSet.toArray(_finishedFarmSet).vals()) {
+                    switch (_farmRewardInfos.get(farm)) { case (?info) { rewardInfos.add(info); }; case (_) {}; };
+                };
+            };
+            case (#CLOSED) {
+                for (farm in TrieSet.toArray(_closedFarmSet).vals()) {
+                    switch (_farmRewardInfos.get(farm)) { case (?info) { rewardInfos.add(info); }; case (_) {}; };
+                };
+            };
+        };
+        return #ok(Buffer.toArray(rewardInfos));
+    };
+
+    public query func getLiveFarmsByPools(pools : [Principal]) : async Result.Result<[(Principal, Principal)], Types.Error> {
+        var farms = Buffer.Buffer<Principal>(0);
+        for (pool in pools.vals()) {
+            switch (_poolFarms.get(pool)) {
+                case (?farmArray) {
+                    farms.append(Buffer.fromArray(farmArray));
+                };
+                case (_) {};
+            };
+        };
+        var liveFarms = TrieSet.toArray(_liveFarmSet);
+        var matchedFarms = _intersectArrays(?Buffer.toArray(farms), ?liveFarms);
+
+        var poolFarms = Buffer.Buffer<(Principal, Principal)>(0);
+        for (farm in matchedFarms.vals()) {
+            switch (_farmRewardInfos.get(farm)) {
+                case (?info) {
+                    poolFarms.add((info.pool, farm));
+                };
+                case (_) {};
+            };
+        };
+        return #ok(Buffer.toArray(poolFarms));
+    };
+
+    public query func getAllPoolFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
+        return #ok(Iter.toArray(_poolFarms.entries()));
     };
 
     public query func getFarmsByRewardToken(rewardToken : Principal) : async Result.Result<[Principal], Types.Error> {
@@ -221,8 +277,8 @@ shared (initMsg) actor class FarmIndex(
             case (?_key) { switch (_rewardTokenFarms.get(_key)) { case (?arr) { ?arr }; case (_) { ?[] }; }; }; 
             case (_) { null };
         };
-        var poolKeyFarms = switch (condition.poolKey) {
-            case (?_key) { switch (_poolKeyFarms.get(_key)) { case (?arr) { ?arr }; case (_) { ?[] }; }; }; case (_) { null };
+        var poolKeyFarms = switch (condition.pool) {
+            case (?_key) { switch (_poolFarms.get(_key)) { case (?arr) { ?arr }; case (_) { ?[] }; }; }; case (_) { null };
         };
         var userFarms = switch (condition.user) {
             case (?_key) { switch (_userFarms.get(_key)) { case (?arr) { ?arr }; case (_) { ?[] }; }; }; case (_) { null };
@@ -235,7 +291,44 @@ shared (initMsg) actor class FarmIndex(
         result := _intersectArrays(?result, userFarms);
 
         return #ok(result);
+    };
 
+    public query func getFarmsByStatusAndConditions(status : Types.FarmStatus, condition : Types.SearchCondition) : async Result.Result<[Principal], Types.Error> {
+        var rewardTokenFarms = switch (condition.rewardToken) {
+            case (?_key) { switch (_rewardTokenFarms.get(_key)) { case (?arr) { ?arr }; case (_) { ?[] }; }; }; 
+            case (_) { null };
+        };
+        var poolKeyFarms = switch (condition.pool) {
+            case (?_key) { switch (_poolFarms.get(_key)) { case (?arr) { ?arr }; case (_) { ?[] }; }; }; case (_) { null };
+        };
+        var userFarms = switch (condition.user) {
+            case (?_key) { switch (_userFarms.get(_key)) { case (?arr) { ?arr }; case (_) { ?[] }; }; }; case (_) { null };
+        };
+        if (Option.isNull(rewardTokenFarms) and Option.isNull(poolKeyFarms) and Option.isNull(userFarms)) {
+            return #ok(_farms);
+        };
+
+        var result = _intersectArrays(rewardTokenFarms, poolKeyFarms);
+        result := _intersectArrays(?result, userFarms);
+
+        switch (status) {
+            case (#NOT_STARTED) {
+                var notStartedFarms = TrieSet.toArray(_notStartedFarmSet);
+                return #ok(_intersectArrays(?result, ?notStartedFarms));
+            };
+            case (#LIVE) {
+                var liveFarms = TrieSet.toArray(_liveFarmSet);
+                return #ok(_intersectArrays(?result, ?liveFarms));
+            };
+            case (#FINISHED) {
+                var finishedFarms = TrieSet.toArray(_finishedFarmSet);
+                return #ok(_intersectArrays(?result, ?finishedFarms));
+            };
+            case (#CLOSED) {
+                var closedFarms = TrieSet.toArray(_closedFarmSet);
+                return #ok(_intersectArrays(?result, ?closedFarms));
+            };
+        };
     };
 
     public query func getAllRewardTokenFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
@@ -350,7 +443,7 @@ shared (initMsg) actor class FarmIndex(
         _farmRewardInfoEntries := Iter.toArray(_farmRewardInfos.entries());
         _userFarmEntries := Iter.toArray(_userFarms.entries());
         _farmUserEntries := Iter.toArray(_farmUsers.entries());
-        _poolKeyFarmEntries := Iter.toArray(_poolKeyFarms.entries());
+        _poolFarmEntries := Iter.toArray(_poolFarms.entries());
         _rewardTokenFarmEntries := Iter.toArray(_rewardTokenFarms.entries());
     };
 
@@ -358,7 +451,7 @@ shared (initMsg) actor class FarmIndex(
         _farmRewardInfoEntries := [];
         _userFarmEntries := [];
         _farmUserEntries := [];
-        _poolKeyFarmEntries := [];
+        _poolFarmEntries := [];
         _rewardTokenFarmEntries := [];
     };
 
@@ -417,12 +510,11 @@ shared (initMsg) actor class FarmIndex(
                 tempFarmIds.add(farmCid);
                 _farms := Buffer.toArray(tempFarmIds);
 
-                let poolKey = info.poolToken0.address # "_" # info.poolToken1.address # "_" # Nat.toText(info.poolFee);
                 tempFarmIds := Buffer.Buffer<Principal>(0);
-                var poolKeyFarmIds = switch (_poolKeyFarms.get(poolKey)) { case (?list) { list }; case (_) { [] }; };
-                for (z in poolKeyFarmIds.vals()) { tempFarmIds.add(z) };
+                var poolFarmIds = switch (_poolFarms.get(info.pool)) { case (?list) { list }; case (_) { [] }; };
+                for (z in poolFarmIds.vals()) { tempFarmIds.add(z) };
                 tempFarmIds.add(farmCid);
-                _poolKeyFarms.put(poolKey, Buffer.toArray(tempFarmIds));
+                _poolFarms.put(info.pool, Buffer.toArray(tempFarmIds));
 
                 tempFarmIds := Buffer.Buffer<Principal>(0);
                 var rewardTokenFarmIds = switch (_rewardTokenFarms.get(Principal.fromText(info.rewardToken.address))) {
@@ -436,6 +528,7 @@ shared (initMsg) actor class FarmIndex(
                     farmCid,
                     {
                         initTime = initTime;
+                        pool = info.pool;
                         poolToken0TVL = {
                             address = Principal.fromText(info.poolToken0.address);
                             standard = info.poolToken0.standard;
