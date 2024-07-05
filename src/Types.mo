@@ -139,6 +139,7 @@ module {
     };
     public type FarmRewardInfo = {
         initTime : Nat;
+        pool : Principal;
         poolToken0TVL : { address : Principal; standard : Text; amount : Nat; };
         poolToken1TVL : { address : Principal; standard : Text; amount : Nat; };
         totalReward : { address : Principal; standard : Text; amount : Nat; };
@@ -160,8 +161,8 @@ module {
         poolToken1 : TokenAmount;
     };
     public type AddFarmIndexArgs = {
-        farmId : Principal;
-        poolKey : Text;
+        farmCid : Principal;
+        poolCid : Principal;
         poolToken0 : Token;
         poolToken1 : Token;
         rewardToken : Token;
@@ -169,7 +170,7 @@ module {
     };
     public type SearchCondition = {
         rewardToken : ?Principal;
-        poolKey : ?Text;
+        pool : ?Principal;
         user : ?Principal;
     };
     public type SwapPositionInfo = {
