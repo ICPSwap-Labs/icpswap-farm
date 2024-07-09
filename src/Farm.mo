@@ -96,9 +96,6 @@ shared (initMsg) actor class Farm(
     getUserPosition : query (positionId : Nat) -> async Result.Result<Types.UserPositionInfo, Types.Error>;
     transferPosition : shared (from : Principal, to : Principal, positionId : Nat) -> async Result.Result<Bool, Types.Error>;
   };
-  private stable var _rewardPoolAct = actor (Principal.toText(initArgs.rewardPool)) : actor {
-    metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
-  };
   private stable var _farmIndexAct = actor (Principal.toText(initArgs.farmIndexCid)) : actor {
     updateUserInfo : shared (users : [Principal]) -> async ();
     updateFarmStatus : shared (status : Types.FarmStatus) -> async ();

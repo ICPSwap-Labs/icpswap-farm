@@ -50,7 +50,6 @@ module {
     public type CreateFarmArgs = {
         rewardToken : Token;
         rewardAmount : Nat;
-        rewardPool : Principal;
         pool : Principal;
         startTime : Nat;
         endTime : Nat;
@@ -63,7 +62,6 @@ module {
     public type InitFarmArgs = {
         rewardToken : Token;
         pool : Principal;
-        rewardPool : Principal;
         startTime : Nat;
         endTime : Nat;
         refunder : Principal;

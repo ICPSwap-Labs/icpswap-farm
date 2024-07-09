@@ -283,8 +283,8 @@ function create_farm()
     one_day_seconds=$((60 * 60 * 24))
     one_day_later_timestamp=$((current_timestamp + one_day_seconds))
 
-    result=`dfx canister call FarmFactory create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
-    # result=`dfx canister call FarmFactory create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; rewardPool = principal \"$poolId_2\"; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 100000000000000; token1AmountLimit = 100000000000000; priceInsideLimit = true; refunder = principal \"$MINTER_PRINCIPAL\";})"`
+    result=`dfx canister call FarmFactory create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 0; token1AmountLimit = 0; priceInsideLimit = false; refunder = principal \"$MINTER_PRINCIPAL\";})"`
+    # result=`dfx canister call FarmFactory create "(record {rewardToken=record {address = \"$token1\"; standard = \"DIP20\";}; rewardAmount = 10000000000; pool = principal \"$poolId_1\"; startTime = $one_minutes_later_timestamp; endTime = $ten_minutes_later_timestamp; secondPerCycle = 30; token0AmountLimit = 100000000000000; token1AmountLimit = 100000000000000; priceInsideLimit = true; refunder = principal \"$MINTER_PRINCIPAL\";})"`
     echo "\033[32m create farm result: $result \033[0m"
 
     if [[ $result =~ ok\ =\ \"([^\"]+)\" ]]; then

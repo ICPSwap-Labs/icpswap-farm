@@ -86,20 +86,6 @@ shared (initMsg) actor class FarmFactory(
         };
 
         try {
-            // check reward token
-            let rewardPoolAct = actor (Principal.toText(args.rewardPool)) : actor {
-                metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
-            };
-            switch (await rewardPoolAct.metadata()) {
-                case (#ok(metadata)) {
-                    if (Text.notEqual(args.rewardToken.address, metadata.token0.address) and Text.notEqual(args.rewardToken.address, metadata.token1.address)) {
-                        throw Error.reject("Illegal SwapPool of reward token");
-                    };
-                };
-                case (#err(code)) {
-                    throw Error.reject("Illegal SwapPool of reward token: " # debug_show (code));
-                };
-            };
             let positionPoolAct = actor (Principal.toText(args.pool)) : actor {
                 metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
             };
@@ -109,7 +95,7 @@ shared (initMsg) actor class FarmFactory(
             };
 
             Cycles.add<system>(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; farmIndexCid = farmIndexCid; }));
+            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; farmIndexCid = farmIndexCid; }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
