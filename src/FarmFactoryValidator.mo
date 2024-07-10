@@ -131,7 +131,7 @@ shared (initMsg) actor class FarmFactoryValidator(
 
     // --------------------------- Version Control ------------------------------------
 
-    private var _version : Text = "3.1.1";
+    private var _version : Text = "3.2.0";
 
     public query func getVersion() : async Text { _version };
 
