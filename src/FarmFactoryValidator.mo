@@ -84,7 +84,7 @@ shared (initMsg) actor class FarmFactoryValidator(
 
         switch (await _farmFactoryAct.getCycleInfo()) {
             case (#ok(cycleInfo)) {
-                if (cycleInfo.balance <= _initCycles or cycleInfo.available <= _initCycles) {
+                if (cycleInfo.balance <= _initCycles) {
                     return #Err("Insufficient Cycle Balance.");
                 };
             };
@@ -145,7 +145,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.1.0";
+    private var _version : Text = "3.1.1";
     public query func getVersion() : async Text { _version };
 
     private func _getTime() : Nat {
