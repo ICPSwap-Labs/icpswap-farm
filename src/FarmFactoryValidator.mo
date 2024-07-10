@@ -67,21 +67,6 @@ shared (initMsg) actor class FarmFactoryValidator(
             return #Err("Incentive duration cannot be less than 1 week");
         };
 
-        // check reward token
-        let rewardPoolAct = actor (Principal.toText(args.rewardPool)) : actor {
-            metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
-        };
-        switch (await rewardPoolAct.metadata()) {
-            case (#ok(poolMetadata)) {
-                if (Text.notEqual(args.rewardToken.address, poolMetadata.token0.address) and Text.notEqual(args.rewardToken.address, poolMetadata.token1.address)) {
-                    return #Err("Illegal SwapPool of reward token");
-                };
-            };
-            case (#err(code)) {
-                return #Err("Illegal SwapPool of reward token: " # debug_show (code));
-            };
-        };
-
         switch (await _farmFactoryAct.getCycleInfo()) {
             case (#ok(cycleInfo)) {
                 if (cycleInfo.balance <= _initCycles) {
@@ -137,7 +122,7 @@ shared (initMsg) actor class FarmFactoryValidator(
         });
     };
 
-    public shared (msg) func getCycleInfo() : async Result.Result<Types.CycleInfo, Types.Error> {
+    public shared func getCycleInfo() : async Result.Result<Types.CycleInfo, Types.Error> {
         return #ok({
             balance = Cycles.balance();
             available = Cycles.available();
@@ -145,7 +130,9 @@ shared (initMsg) actor class FarmFactoryValidator(
     };
 
     // --------------------------- Version Control ------------------------------------
+
     private var _version : Text = "3.1.1";
+
     public query func getVersion() : async Text { _version };
 
     private func _getTime() : Nat {
@@ -153,7 +140,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     };
 
     private func _checkFarm(farmCid : Principal) : async Bool {
-        switch (await _farmFactoryAct.getAllFarmId()) {
+        switch (await _farmFactoryAct.getAllFarms()) {
             case (#ok(farms)) {
                 for (it in farms.vals()) {
                     if (Principal.equal(farmCid, it)) {

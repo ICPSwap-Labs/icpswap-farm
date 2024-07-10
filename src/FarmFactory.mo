@@ -3,11 +3,9 @@ import Cycles "mo:base/ExperimentalCycles";
 import Error "mo:base/Error";
 import List "mo:base/List";
 import Time "mo:base/Time";
-import Nat "mo:base/Nat";
-import Nat32 "mo:base/Nat32";
+import Nat "mo:base/Nat";            
 import Nat64 "mo:base/Nat64";
-import TrieSet "mo:base/TrieSet";
-import Int64 "mo:base/Int64";
+import Int64 "mo:base/Int64"; 
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
@@ -17,11 +15,11 @@ import SafeUint "mo:commons/math/SafeUint";
 import Farm "./Farm";
 import Types "./Types";
 import Prim "mo:⛔";
-import FarmDataService "./components/FarmData";
 
 shared (initMsg) actor class FarmFactory(
     feeReceiverCid : Principal,
     governanceCid : ?Principal,
+    farmIndexCid : Principal,
 ) = this {
 
     private stable var _initCycles : Nat = 1860000000000;
@@ -34,23 +32,19 @@ shared (initMsg) actor class FarmFactory(
     private stable var FOUR_HOURS : Nat = 14400;
     private stable var THIRTY_MINUTES : Nat = 1800;
 
+    private stable var _farms : [Principal] = [];
+
     private let IC0 = actor "aaaaa-aa" : actor {
         canister_status : { canister_id : Principal } -> async { settings : { controllers : [Principal] }; };
         update_settings : { canister_id : Principal; settings : { controllers : [Principal]; } } -> ();
     };
+    private let _farmIndexAct = actor (Principal.toText(farmIndexCid)) : actor {
+        updatePrincipalRecord : shared (principalRecord : [Principal]) -> async ();
+        addFarmIndex : shared (input : Types.AddFarmIndexArgs) -> async ();
+    };
 
     // the fee that is taken from every unstake that is executed on the farm in 1 per thousand
     private stable var _fee : Nat = 50;
-
-    private stable var _principalRecordSet = TrieSet.empty<Principal>();
-
-    private stable var _farmDataState : FarmDataService.State = {
-        notStartedFarmEntries = [];
-        liveFarmEntries = [];
-        finishedFarmEntries = [];
-        closedFarmEntries = [];
-    };
-    private var _farmDataService : FarmDataService.Service = FarmDataService.Service(_farmDataState);
 
     public shared (msg) func create(args : Types.CreateFarmArgs) : async Result.Result<Text, Text> {
         _checkAdminPermission(msg.caller);
@@ -96,24 +90,29 @@ shared (initMsg) actor class FarmFactory(
                 metadata : query () -> async Result.Result<Types.PoolMetadata, Types.Error>;
             };
             let positionPoolMetadata = switch (await positionPoolAct.metadata()) {
-                case (#ok(poolMetadata)) { poolMetadata; };
+                case (#ok(metadata)) { metadata; };
                 case (#err(code)) { throw Error.reject("Illegal position SwapPool: " # debug_show (code)); };
             };
 
             Cycles.add<system>(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; rewardPool = args.rewardPool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; }));
+            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; farmIndexCid = farmIndexCid; }));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
+            // update farm index
+            await _farmIndexAct.addFarmIndex({
+                farmCid = farm;
+                poolCid = args.pool;
+                poolToken0 = positionPoolMetadata.token0;
+                poolToken1 = positionPoolMetadata.token1;
+                rewardToken = args.rewardToken;
+                totalReward = args.rewardAmount;
+            });
 
-            _farmDataService.putNotStartedFarm(
-                farm,
-                {
-                    poolToken0 = { address = positionPoolMetadata.token0.address; standard = positionPoolMetadata.token0.standard; amount = 0; };
-                    poolToken1 = { address = positionPoolMetadata.token1.address; standard = positionPoolMetadata.token1.standard; amount = 0; };
-                    rewardToken = { address = args.rewardToken.address; standard = args.rewardToken.standard; amount = args.rewardAmount; };
-                },
-            );
+            var tempFarmIds = Buffer.Buffer<Principal>(0);
+            for (z in _farms.vals()) { tempFarmIds.add(z) };
+            tempFarmIds.add(farm);
+            _farms := Buffer.toArray(tempFarmIds);
 
             _unlock();
             return #ok(Principal.toText(farm));
@@ -121,35 +120,6 @@ shared (initMsg) actor class FarmFactory(
             _unlock();
             return #err(Error.message(error));
         };
-    };
-
-    public shared (msg) func updateFarmInfo(status : Types.FarmStatus, tvl : Types.TVL) : async () {
-        if (not CollectionUtils.arrayContains(_farmDataService.getAllFarmId(), msg.caller, Principal.equal)) {
-            return;
-        };
-
-        _farmDataService.deleteNotStartedFarm(msg.caller);
-        _farmDataService.deleteLiveFarm(msg.caller);
-        _farmDataService.deleteFinishedFarm(msg.caller);
-        _farmDataService.deleteClosedFarm(msg.caller);
-        if (status == #NOT_STARTED) {
-            _farmDataService.putNotStartedFarm(msg.caller, tvl);
-        } else if (status == #LIVE) {
-            _farmDataService.putLiveFarm(msg.caller, tvl);
-        } else if (status == #FINISHED) {
-            _farmDataService.putFinishedFarm(msg.caller, tvl);
-        } else if (status == #CLOSED) {
-            _farmDataService.putClosedFarm(msg.caller, tvl);
-        };
-    };
-
-    public shared (msg) func updatePrincipalRecord(principalRecord : [Principal]) : async () {
-        if (not CollectionUtils.arrayContains(_farmDataService.getAllFarmId(), msg.caller, Principal.equal)) {
-            return;
-        };
-        
-        let principalRecordSet = TrieSet.fromArray<Principal>(principalRecord, _hashPrincipal, Principal.equal);
-        _principalRecordSet := TrieSet.union(_principalRecordSet, principalRecordSet, Principal.equal);
     };
 
     public shared func getCycleInfo() : async Result.Result<Types.CycleInfo, Types.Error> {
@@ -168,61 +138,24 @@ shared (initMsg) actor class FarmFactory(
         return #ok(_fee);
     };
 
-    public query func getFarms(status : ?Types.FarmStatus) : async Result.Result<[(Principal, Types.TVL)], Text> {
-        switch (status) {
-            case (? #NOT_STARTED) {
-                return #ok(_farmDataService.getTargetArray(#NOT_STARTED));
-            };
-            case (? #LIVE) {
-                return #ok(_farmDataService.getTargetArray(#LIVE));
-            };
-            case (? #FINISHED) {
-                return #ok(_farmDataService.getTargetArray(#FINISHED));
-            };
-            case (? #CLOSED) {
-                return #ok(_farmDataService.getTargetArray(#CLOSED));
-            };
-            case (null) { return #ok(_farmDataService.getAllArray()) };
-        };
-    };
-
-    public query func getAllFarms() : async Result.Result<{ NOT_STARTED : [(Principal, Types.TVL)]; LIVE : [(Principal, Types.TVL)]; FINISHED : [(Principal, Types.TVL)]; CLOSED : [(Principal, Types.TVL)] }, Text> {
-        return #ok({
-            NOT_STARTED = _farmDataService.getTargetArray(#NOT_STARTED);
-            LIVE = _farmDataService.getTargetArray(#LIVE);
-            FINISHED = _farmDataService.getTargetArray(#FINISHED);
-            CLOSED = _farmDataService.getTargetArray(#CLOSED);
-        });
-    };
-
-    public query func getAllFarmId() : async Result.Result<[Principal], Types.Error> {
-        return #ok(_farmDataService.getAllFarmId());
-    };
-
-    public query func getPrincipalRecord() : async Result.Result<[Principal], Types.Error> {
-        return #ok(TrieSet.toArray(_principalRecordSet));
-    };
-
-    public query func getTotalAmount() : async Result.Result<{ farmAmount : Nat; principalAmount : Nat; }, Types.Error> {
-        return #ok({
-            farmAmount = _farmDataService.getAllFarmId().size();
-            principalAmount = TrieSet.size(_principalRecordSet);
-        });
-    };
-
-    public query func getInitArgs() : async Result.Result<{ feeReceiverCid : Principal; governanceCid : ?Principal }, Types.Error> {
+    public query func getInitArgs() : async Result.Result<{ 
+        feeReceiverCid : Principal; 
+        governanceCid : ?Principal;
+        farmIndexCid : Principal;
+    }, Types.Error> {
         #ok({
             feeReceiverCid = feeReceiverCid;
             governanceCid = governanceCid;
+            farmIndexCid = farmIndexCid;
         });
+    };
+
+     public query func getAllFarms() : async Result.Result<[Principal], Types.Error> {
+        return #ok(_farms);
     };
 
     private func _getTime() : Nat {
         return Nat64.toNat(Int64.toNat64(Int64.fromInt(Time.now() / 1000000000)));
-    };
-    
-    private func _hashPrincipal(key : Principal) : Nat32 {
-        Prim.hashBlob(Prim.encodeUtf8(Principal.toText(key))) & 0x3fffffff;
     };
 
     // --------------------------- LOCK ------------------------------------
@@ -306,13 +239,11 @@ shared (initMsg) actor class FarmFactory(
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.1.0";
+    private var _version : Text = "3.2.0";
     public query func getVersion() : async Text { _version };
 
     // --------------------------- LIFE CYCLE -----------------------------------
-    system func preupgrade() {
-        _farmDataState := _farmDataService.getState();
-    };
+    system func preupgrade() {};
     system func postupgrade() {};
 
     system func inspect({
