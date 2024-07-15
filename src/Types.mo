@@ -167,6 +167,7 @@ module {
         totalReward : Nat;
     };
     public type SearchCondition = {
+        status : ?[FarmStatus];
         rewardToken : ?Principal;
         pool : ?Principal;
         user : ?Principal;
