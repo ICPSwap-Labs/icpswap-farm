@@ -75,8 +75,24 @@ module {
         farmFactoryCid : Principal;
         feeReceiverCid : Principal;
         farmIndexCid : Principal;
+        nodeIndexCid : Principal;
         fee : Nat;
         governanceCid : ?Principal;
+    };
+    public type PublicTokenOverview = {
+        id : Nat;
+        address : Text;
+        feesUSD : Float;
+        standard : Text;
+        name : Text;
+        symbol : Text;
+        priceUSD : Float;
+        priceUSDChange : Float;
+        txCount : Int;
+        volumeUSD : Float;
+        volumeUSD1d : Float;
+        volumeUSD7d : Float;
+        totalVolumeUSD : Float;
     };
     public type PoolMetadata = {
         key : Text;
@@ -240,6 +256,9 @@ module {
         #clearErrorLog : () -> ();
         #close : () -> ();
         #finishManually : () -> ();
+        #getAPR : () -> ();
+        #getAPRConst : () -> ();
+        #getAPRRecord : () -> ();
         #getAdmins : () -> ();
         #getCycleInfo : () -> ();
         #getDeposit : () -> Nat;
@@ -252,7 +271,6 @@ module {
         #getPoolMeta : () -> ();
         #getPoolTokenMeta : () -> ();
         #getPositionIds : () -> ();
-        #getPrincipalRecord : () -> ();
         #getRewardInfo : () -> [Nat];
         #getRewardMeta : () -> ();
         #getRewardTokenBalance : () -> ();
@@ -301,5 +319,9 @@ module {
         getDeposit : query Nat -> async Result.Result<Deposit, Error>;
         getTVL : query () -> async Result.Result<{ stakedTokenTVL : Float; rewardTokenTVL : Float }, Error>;
         withdrawRewardFee : query () -> async Result.Result<Text, Error>;
+    };
+
+    public type ITokenStorage = actor {
+        getToken : query (token : Text) -> async PublicTokenOverview;
     };
 };

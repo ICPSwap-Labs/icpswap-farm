@@ -70,6 +70,7 @@ shared (initMsg) actor class Farm(
 
   // reward token metadata
   private stable var _rewardTokenFee = 0;
+  private stable var _rewardTokenDecimals = 0;
 
   // limit params
   private stable var _positionNumLimit : Nat = 500;
@@ -89,6 +90,18 @@ shared (initMsg) actor class Farm(
   private var _stakeRecordBuffer : Buffer.Buffer<Types.StakeRecord> = Buffer.Buffer<Types.StakeRecord>(0);
   private stable var _distributeRecordList : [Types.DistributeRecord] = [];
   private var _distributeRecordBuffer : Buffer.Buffer<Types.DistributeRecord> = Buffer.Buffer<Types.DistributeRecord>(0);
+
+  // APR
+  private stable var _timeConst : Float = 360 * 24 * 3600;
+  private stable var _rewardTokenDecimalsConst : Float = 0;
+  private stable var _token0DecimalsConst : Float = 0;
+  private stable var _token1DecimalsConst : Float = 0;
+  private stable var _APR : Float = 0;
+  private stable var _APRRecordList : [(Nat, Float)] = [];
+  private var _APRRecordBuffer : Buffer.Buffer<(Nat, Float)> = Buffer.Buffer<(Nat, Float)>(0);
+  private stable var _nodeIndexAct = actor (Principal.toText(initArgs.nodeIndexCid)) : actor {
+    tokenStorage : query (tokenId : Text) -> async ?Text;
+  };
 
   let _rewardTokenAdapter = TokenFactory.getAdapter(initArgs.rewardToken.address, initArgs.rewardToken.standard);
   private stable var _swapPoolAct = actor (Principal.toText(initArgs.pool)) : actor {
@@ -141,6 +154,12 @@ shared (initMsg) actor class Farm(
     _poolToken1Decimals := Nat8.toNat(await _poolToken1Adapter.decimals());
 
     _rewardTokenFee := await _rewardTokenAdapter.fee();
+    _rewardTokenDecimals := Nat8.toNat(await _rewardTokenAdapter.decimals());
+
+    _rewardTokenDecimalsConst := Float.pow(10, Float.fromInt(IntUtils.toInt(_rewardTokenDecimals, 512)));
+    _token0DecimalsConst := Float.pow(10, Float.fromInt(IntUtils.toInt(_poolToken0Decimals, 512)));
+    _token1DecimalsConst := Float.pow(10, Float.fromInt(IntUtils.toInt(_poolToken1Decimals, 512)));
+
     _poolMetadata := {
       sqrtPriceX96 = poolMetadata.sqrtPriceX96;
       tick = poolMetadata.tick;
@@ -738,6 +757,28 @@ shared (initMsg) actor class Farm(
     return #ok(_TVL);
   };
 
+  public query func getAPR() : async Result.Result<Float, Types.Error> {
+    return #ok(_APR);
+  };
+
+  public query func getAPRRecord() : async Result.Result<[(Nat, Float)], Types.Error> {
+    return #ok(Buffer.toArray(_APRRecordBuffer));
+  };
+
+  public query func getAPRConst() : async Result.Result<{
+    timeConst : Float;
+    rewardTokenDecimalsConst : Float;
+    token0DecimalsConst : Float;
+    token1DecimalsConst : Float;
+  }, Types.Error> {
+    return #ok({
+      timeConst = _timeConst;
+      rewardTokenDecimalsConst = _rewardTokenDecimalsConst;
+      token0DecimalsConst = _token0DecimalsConst;
+      token1DecimalsConst = _token1DecimalsConst;
+    });
+  };
+
   public query func getInitArgs() : async Result.Result<Types.InitFarmArgs, Types.Error> {
     return #ok(initArgs);
   };
@@ -779,7 +820,8 @@ shared (initMsg) actor class Farm(
     rewardPerCycle : Nat; 
     currentCycleCount : Nat; 
     totalCycleCount : Nat;
-    rewardTokenFee : Nat; 
+    rewardTokenFee : Nat;
+    rewardTokenDecimals : Nat; 
   }, Types.Error> {
     return #ok({
       totalReward = _totalReward;
@@ -792,6 +834,7 @@ shared (initMsg) actor class Farm(
       currentCycleCount = _currentCycleCount;
       totalCycleCount = _totalCycleCount;
       rewardTokenFee = _rewardTokenFee;
+      rewardTokenDecimals = _rewardTokenDecimals;
     });
   };
 
@@ -949,6 +992,49 @@ shared (initMsg) actor class Farm(
   private func _updateTVL() : async () {
     Debug.print(" ---> _updateTVL ");
     await _farmIndexAct.updateFarmTVL(_TVL);
+  };
+  
+  private func _updateAPR() : async () {
+    Debug.print(" ---> _updateAPR ");
+    try {
+      let rewardTokenStorageCid = switch (await _nodeIndexAct.tokenStorage(initArgs.rewardToken.address)) {
+        case (?cid) { cid };
+        case (_) { _errorLogBuffer.add("_updateAPR get reward token storage cid failed. nowTime: " # debug_show (_getTime())); return; };
+      };
+      let token0StorageCid = switch (await _nodeIndexAct.tokenStorage(_poolToken0.address)) {
+        case (?cid) { cid };
+        case (_) { _errorLogBuffer.add("_updateAPR get token0 storage cid failed. nowTime: " # debug_show (_getTime())); return; };
+      };
+      let token1StorageCid = switch (await _nodeIndexAct.tokenStorage(_poolToken1.address)) {
+        case (?cid) { cid };
+        case (_) { _errorLogBuffer.add("_updateAPR get token1 storage cid failed. nowTime: " # debug_show (_getTime())); return;
+        };
+      };
+      let rewardTokenStorageAct = actor (rewardTokenStorageCid) : Types.ITokenStorage;
+      let token0StorageAct = actor (token0StorageCid) : Types.ITokenStorage;
+      let token1StorageAct = actor (token1StorageCid) : Types.ITokenStorage;
+      let rewardTokenPriceUSD = (await rewardTokenStorageAct.getToken(initArgs.rewardToken.address)).priceUSD;
+      let token0PriceUSD = (await token0StorageAct.getToken(_poolToken0.address)).priceUSD;
+      let token1PriceUSD = (await token1StorageAct.getToken(_poolToken1.address)).priceUSD;
+
+      // (Reward token amount each cycles * reward token price / Total valued staked) * (360 * 24 * 3600 / seconds each cycle) * 100%
+      let rewardTokenAmount = Float.div(Float.fromInt(IntUtils.toInt(_rewardPerCycle, 512)), _rewardTokenDecimalsConst);
+      let rewardTokenUSDValue = Float.mul(rewardTokenAmount, rewardTokenPriceUSD);
+      let token0Amount = Float.div(Float.fromInt(IntUtils.toInt(_TVL.poolToken0.amount, 512)), _token0DecimalsConst);
+      let token1Amount = Float.div(Float.fromInt(IntUtils.toInt(_TVL.poolToken1.amount, 512)), _token1DecimalsConst);
+      let tvlUSD = Float.mul(token0Amount, token0PriceUSD) + Float.mul(token1Amount, token1PriceUSD);
+      var apr =  100 * (rewardTokenUSDValue / tvlUSD) * (_timeConst / Float.fromInt(IntUtils.toInt(initArgs.secondPerCycle, 512)));
+      
+      _APRRecordBuffer.add((_getTime(), apr));
+
+      var totalAPR :Float = 0;
+      for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) {
+        totalAPR += apr;
+      };
+      _APR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
+    } catch (e) {
+      _errorLogBuffer.add("_updateAPR failed " # debug_show (Error.message(e)) # " . nowTime: " # debug_show (_getTime()));
+    };
   };
 
   private func _syncPoolMeta() : async () {
@@ -1253,6 +1339,7 @@ shared (initMsg) actor class Farm(
   let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(120), _updateUserInfo);
   let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(600), _updateTVL);
   let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(3600), _updateRewardTokenFee);
+  let _updateAPRPer30m = Timer.recurringTimer<system>(#seconds(1800), _updateAPR);
   
   // for testing
   // let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
@@ -1261,6 +1348,7 @@ shared (initMsg) actor class Farm(
   // let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(10), _updateUserInfo);
   // let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(10), _updateTVL);
   // let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(10), _updateRewardTokenFee);
+  // let _updateAPRPer30m = Timer.recurringTimer<system>(#seconds(10), _updateAPR);
   // --------------------------- Version Control ------------------------------------
   private var _version : Text = "3.2.0";
   public query func getVersion() : async Text { _version };
@@ -1272,6 +1360,7 @@ shared (initMsg) actor class Farm(
     _errorLogList := Buffer.toArray(_errorLogBuffer);
     _stakeRecordList := Buffer.toArray(_stakeRecordBuffer);
     _distributeRecordList := Buffer.toArray(_distributeRecordBuffer);
+    _APRRecordList := Buffer.toArray(_APRRecordBuffer);
     _rewardTokenHolderState := _rewardTokenHolderService.getState();
   };
 
@@ -1279,9 +1368,11 @@ shared (initMsg) actor class Farm(
     for (record in _errorLogList.vals()) { _errorLogBuffer.add(record) };
     for (record in _stakeRecordList.vals()) { _stakeRecordBuffer.add(record) };
     for (record in _distributeRecordList.vals()) { _distributeRecordBuffer.add(record); };
+    for (record in _APRRecordList.vals()) { _APRRecordBuffer.add(record); };
     _stakeRecordList := [];
     _distributeRecordList := [];
     _errorLogList := [];
+    _APRRecordList := [];
     _depositEntries := [];
     _userPositionEntries := [];
   };
