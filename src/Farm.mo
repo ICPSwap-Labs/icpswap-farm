@@ -549,6 +549,7 @@ shared (initMsg) actor class Farm(
     Timer.cancelTimer(_updateUserInfoPer120s);
     Timer.cancelTimer(_updateTVLPer10m);
     Timer.cancelTimer(_updateRewardTokenFeePer1h);
+    Timer.cancelTimer(_updateAPRPer30m);
 
     if (balance > _rewardTokenFee) {
       var amount = balance - _rewardTokenFee;
@@ -576,6 +577,9 @@ shared (initMsg) actor class Farm(
               poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
               poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
             };
+            var totalAPR : Float = 0;
+            for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) { totalAPR += apr; };
+            _APR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
           };
           case (#Err(code)) {
             _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . Code: " # debug_show (code) # ".");
@@ -597,6 +601,9 @@ shared (initMsg) actor class Farm(
         poolToken0 = { address = _TVL.poolToken0.address; standard = _TVL.poolToken0.standard; amount = 0; };
         poolToken1 = { address = _TVL.poolToken1.address; standard = _TVL.poolToken1.standard; amount = 0; };
       };
+      var totalAPR : Float = 0;
+      for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) { totalAPR += apr; };
+      _APR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
     };
 
     return #ok("Close successfully");
@@ -1026,12 +1033,6 @@ shared (initMsg) actor class Farm(
       var apr =  100 * (rewardTokenUSDValue / tvlUSD) * (_timeConst / Float.fromInt(IntUtils.toInt(initArgs.secondPerCycle, 512)));
       
       _APRRecordBuffer.add((_getTime(), apr));
-
-      var totalAPR :Float = 0;
-      for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) {
-        totalAPR += apr;
-      };
-      _APR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
     } catch (e) {
       _errorLogBuffer.add("_updateAPR failed " # debug_show (Error.message(e)) # " . nowTime: " # debug_show (_getTime()));
     };
