@@ -143,11 +143,13 @@ shared (initMsg) actor class FarmFactory(
         feeReceiverCid : Principal; 
         governanceCid : ?Principal;
         farmIndexCid : Principal;
+        nodeIndexCid : Principal;
     }, Types.Error> {
         #ok({
             feeReceiverCid = feeReceiverCid;
             governanceCid = governanceCid;
             farmIndexCid = farmIndexCid;
+            nodeIndexCid = nodeIndexCid;
         });
     };
 
