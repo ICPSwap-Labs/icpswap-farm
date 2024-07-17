@@ -120,7 +120,7 @@ dfx canister install PasscodeManager --argument="(principal \"$(dfx canister id 
 echo "==> install FarmFeeReceiver"
 dfx canister install FarmFeeReceiver
 echo "==> install FarmFactory"
-dfx canister install FarmFactory --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null, principal \"$(dfx canister id FarmIndex)\")"
+dfx canister install FarmFactory --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null, principal \"$(dfx canister id FarmIndex)\", principal \"$(dfx canister id node_index)\")"
 echo "==> install FarmIndex"
 dfx canister install FarmIndex --argument="(principal \"$(dfx canister id FarmFactory)\")"
 
@@ -128,6 +128,7 @@ dipAId=`dfx canister id DIP20A`
 dipBId=`dfx canister id DIP20B`
 testId=`dfx canister id Test`
 infoId=`dfx canister id base_index`
+nodeIndexId=`dfx canister id node_index`
 swapFactoryId=`dfx canister id SwapFactory`
 positionIndexId=`dfx canister id PositionIndex`
 swapFeeReceiverId=`dfx canister id SwapFeeReceiver`
@@ -137,6 +138,7 @@ farmIndexId=`dfx canister id FarmIndex`
 zeroForOne="true"
 ICP="$(dfx canister id ICRC2)"
 echo "==> infoId (\"$infoId\")"
+echo "==> nodeIndexId (\"$nodeIndexId\")"
 echo "==> positionIndexId (\"$positionIndexId\")"
 echo "==> swapFeeReceiverId (\"$swapFeeReceiverId\")"
 echo "==> farmFactoryId (\"$farmFactoryId\")"
