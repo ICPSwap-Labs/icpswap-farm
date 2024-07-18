@@ -770,6 +770,7 @@ shared (initMsg) actor class Farm(
       return #ok(_avgAPR);
     } else {
       var totalAPR : Float = 0;
+      if (_APRRecordBuffer.size() == 0) { return #ok(0); };
       for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) { totalAPR += apr; };
       return #ok(Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512))));
     };
