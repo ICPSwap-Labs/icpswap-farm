@@ -100,6 +100,7 @@ shared (initMsg) actor class FarmFactory(
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
+            await farmActor.setAdmins(_admins);
             // update farm index
             await _farmIndexAct.addFarmIndex({
                 farmCid = farm;
