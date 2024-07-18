@@ -256,10 +256,10 @@ module {
         #clearErrorLog : () -> ();
         #close : () -> ();
         #finishManually : () -> ();
-        #getAPR : () -> ();
         #getAPRConst : () -> ();
         #getAPRRecord : () -> ();
         #getAdmins : () -> ();
+        #getAvgAPR : () -> ();
         #getCycleInfo : () -> ();
         #getDeposit : () -> Nat;
         #getDistributeRecord : () -> (Nat, Nat, Text);

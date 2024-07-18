@@ -96,7 +96,7 @@ shared (initMsg) actor class Farm(
   private stable var _rewardTokenDecimalsConst : Float = 0;
   private stable var _token0DecimalsConst : Float = 0;
   private stable var _token1DecimalsConst : Float = 0;
-  private stable var _APR : Float = 0;
+  private stable var _avgAPR : Float = 0;
   private stable var _APRRecordList : [(Nat, Float)] = [];
   private var _APRRecordBuffer : Buffer.Buffer<(Nat, Float)> = Buffer.Buffer<(Nat, Float)>(0);
   private stable var _nodeIndexAct = actor (Principal.toText(initArgs.nodeIndexCid)) : actor {
@@ -402,6 +402,7 @@ shared (initMsg) actor class Farm(
   public shared (msg) func restartManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #LIVE;
+    _avgAPR := 0;
     await _farmIndexAct.updateFarmStatus(_status);
     return #ok("Restart farm successfully");
   };
@@ -579,7 +580,7 @@ shared (initMsg) actor class Farm(
             };
             var totalAPR : Float = 0;
             for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) { totalAPR += apr; };
-            _APR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
+            _avgAPR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
           };
           case (#Err(code)) {
             _errorLogBuffer.add("Refund failed at " # debug_show (nowTime) # " . Code: " # debug_show (code) # ".");
@@ -603,7 +604,7 @@ shared (initMsg) actor class Farm(
       };
       var totalAPR : Float = 0;
       for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) { totalAPR += apr; };
-      _APR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
+      _avgAPR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
     };
 
     return #ok("Close successfully");
@@ -764,8 +765,14 @@ shared (initMsg) actor class Farm(
     return #ok(_TVL);
   };
 
-  public query func getAPR() : async Result.Result<Float, Types.Error> {
-    return #ok(_APR);
+  public query func getAvgAPR() : async Result.Result<Float, Types.Error> {
+    if (_avgAPR != 0) {
+      return #ok(_avgAPR);
+    } else {
+      var totalAPR : Float = 0;
+      for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) { totalAPR += apr; };
+      return #ok(Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512))));
+    };
   };
 
   public query func getAPRRecord() : async Result.Result<[(Nat, Float)], Types.Error> {
@@ -950,7 +957,7 @@ shared (initMsg) actor class Farm(
   };
 
   private func _updateRewardTokenFee() : async () {
-    Debug.print(" ---> _updateRewardTokenFee ");
+    // Debug.print(" ---> _updateRewardTokenFee ");
     try {
       _rewardTokenFee := await _rewardTokenAdapter.fee();
     } catch (e) {
@@ -959,7 +966,7 @@ shared (initMsg) actor class Farm(
   };
 
   private func _updateStatus() : async () {
-    Debug.print(" ---> _updateStatus ");
+    // Debug.print(" ---> _updateStatus ");
     var nowTime = _getTime();
     // check balance
     if (_status == #NOT_STARTED) {
@@ -992,18 +999,25 @@ shared (initMsg) actor class Farm(
   };
 
   private func _updateUserInfo() : async () {
-    Debug.print(" ---> _updateUserInfo ");
+    // Debug.print(" ---> _updateUserInfo ");
     await _farmIndexAct.updateUserInfo(Iter.toArray(_userPositionMap.keys()));
   };
 
   private func _updateTVL() : async () {
-    Debug.print(" ---> _updateTVL ");
+    // Debug.print(" ---> _updateTVL ");
     await _farmIndexAct.updateFarmTVL(_TVL);
   };
   
   private func _updateAPR() : async () {
-    Debug.print(" ---> _updateAPR ");
+    if (_status == #FINISHED and _avgAPR == 0 ) {
+      Debug.print(" ---> _updateAvgAPR ");
+      var totalAPR : Float = 0;
+      for ((time, apr) in Buffer.toArray(_APRRecordBuffer).vals()) { totalAPR += apr; };
+      _avgAPR := Float.div(totalAPR, Float.fromInt(IntUtils.toInt(_APRRecordBuffer.size(), 512)));
+    };
+    if (_status != #LIVE) { return };
     try {
+      Debug.print(" ---> _updateAPR ");
       let rewardTokenStorageCid = switch (await _nodeIndexAct.tokenStorage(initArgs.rewardToken.address)) {
         case (?cid) { cid };
         case (_) { _errorLogBuffer.add("_updateAPR get reward token storage cid failed. nowTime: " # debug_show (_getTime())); return; };
@@ -1039,7 +1053,7 @@ shared (initMsg) actor class Farm(
   };
 
   private func _syncPoolMeta() : async () {
-    Debug.print(" ---> _syncPoolMeta ");
+    // Debug.print(" ---> _syncPoolMeta ");
     try {
       _poolMetadata := switch (await _swapPoolAct.metadata()) {
         case (#ok(poolMetadata)) { poolMetadata };
@@ -1244,7 +1258,7 @@ shared (initMsg) actor class Farm(
   };
 
   // --------------------------- ACL ------------------------------------
-  private stable var _admins : [Principal] = [initArgs.creator];
+  private stable var _admins : [Principal] = [];
   public shared (msg) func setAdmins(admins : [Principal]) : async () {
     _checkPermission(msg.caller);
     _admins := admins;
