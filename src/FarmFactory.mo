@@ -20,6 +20,7 @@ shared (initMsg) actor class FarmFactory(
     feeReceiverCid : Principal,
     governanceCid : ?Principal,
     farmIndexCid : Principal,
+    nodeIndexCid : Principal,
 ) = this {
 
     private stable var _initCycles : Nat = 1860000000000;
@@ -95,10 +96,11 @@ shared (initMsg) actor class FarmFactory(
             };
 
             Cycles.add<system>(_initCycles);
-            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; farmIndexCid = farmIndexCid; }));
+            var farm = Principal.fromActor(await Farm.Farm({ rewardToken = args.rewardToken; pool = args.pool; startTime = args.startTime; endTime = args.endTime; refunder = args.refunder; totalReward = args.rewardAmount; status = #NOT_STARTED; secondPerCycle = args.secondPerCycle; token0AmountLimit = args.token0AmountLimit; token1AmountLimit = args.token1AmountLimit; priceInsideLimit = args.priceInsideLimit; creator = msg.caller; farmFactoryCid = Principal.fromActor(this); feeReceiverCid = feeReceiverCid; fee = _fee; governanceCid = governanceCid; farmIndexCid = farmIndexCid; nodeIndexCid = nodeIndexCid;}));
             await IC0Utils.update_settings_add_controller(farm, initMsg.caller);
             let farmActor = actor (Principal.toText(farm)) : Types.IFarm;
             await farmActor.init();
+            await farmActor.setAdmins(_admins);
             // update farm index
             await _farmIndexAct.addFarmIndex({
                 farmCid = farm;
@@ -142,11 +144,13 @@ shared (initMsg) actor class FarmFactory(
         feeReceiverCid : Principal; 
         governanceCid : ?Principal;
         farmIndexCid : Principal;
+        nodeIndexCid : Principal;
     }, Types.Error> {
         #ok({
             feeReceiverCid = feeReceiverCid;
             governanceCid = governanceCid;
             farmIndexCid = farmIndexCid;
+            nodeIndexCid = nodeIndexCid;
         });
     };
 

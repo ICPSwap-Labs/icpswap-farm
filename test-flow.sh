@@ -120,7 +120,7 @@ dfx canister install PasscodeManager --argument="(principal \"$(dfx canister id 
 echo "==> install FarmFeeReceiver"
 dfx canister install FarmFeeReceiver
 echo "==> install FarmFactory"
-dfx canister install FarmFactory --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null, principal \"$(dfx canister id FarmIndex)\")"
+dfx canister install FarmFactory --argument="(principal \"$(dfx canister id FarmFeeReceiver)\", null, principal \"$(dfx canister id FarmIndex)\", principal \"$(dfx canister id node_index)\")"
 echo "==> install FarmIndex"
 dfx canister install FarmIndex --argument="(principal \"$(dfx canister id FarmFactory)\")"
 
@@ -128,6 +128,7 @@ dipAId=`dfx canister id DIP20A`
 dipBId=`dfx canister id DIP20B`
 testId=`dfx canister id Test`
 infoId=`dfx canister id base_index`
+nodeIndexId=`dfx canister id node_index`
 swapFactoryId=`dfx canister id SwapFactory`
 positionIndexId=`dfx canister id PositionIndex`
 swapFeeReceiverId=`dfx canister id SwapFeeReceiver`
@@ -137,6 +138,7 @@ farmIndexId=`dfx canister id FarmIndex`
 zeroForOne="true"
 ICP="$(dfx canister id ICRC2)"
 echo "==> infoId (\"$infoId\")"
+echo "==> nodeIndexId (\"$nodeIndexId\")"
 echo "==> positionIndexId (\"$positionIndexId\")"
 echo "==> swapFeeReceiverId (\"$swapFeeReceiverId\")"
 echo "==> farmFactoryId (\"$farmFactoryId\")"
@@ -205,7 +207,7 @@ function create_pool_2() #sqrtPriceX96
     dfx canister call PositionIndex updatePoolIds 
 }
 
-function depost() # token tokenAmount
+function deposit() # token tokenAmount
 {   
     result=`dfx canister call $poolId_1 depositFrom "(record {token = \"$1\"; amount = $2: nat; fee = $TRANS_FEE: nat; })"`
     result=${result//"_"/""}
@@ -229,9 +231,9 @@ function mint(){ #tickLower tickUpper amount0Desired amount0Min amount1Desired a
     dfx canister call PositionIndex addPoolId "(\"$poolId_1\")"
 }
 
-function swap() #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96  token0BalanceAmount token1BalanceAmount zeroForOne
+function swap() #depositToken depositAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96  token0BalanceAmount token1BalanceAmount zeroForOne
 {
-    depost $1 $2    
+    deposit $1 $2    
     if [[ "$1" =~ "$token0" ]]; then
         result=`dfx canister call $poolId_1 swap "(record { zeroForOne = true; amountIn = \"$3\"; amountOutMinimum = \"$4\"; })"`
     else
@@ -373,8 +375,8 @@ function test()
 
     echo
     echo "==> 1 mint"
-    depost $token0 100000000000
-    depost $token1 1667302813453
+    deposit $token0 100000000000
+    deposit $token1 1667302813453
     #tickLower tickUpper amount0Desired amount0Min amount1Desired amount1Min ### liquidity tickCurrent sqrtRatioX96
     mint -23040 46080 100000000000 92884678893 1667302813453 1573153132015 529634421680 24850 274450166607934908532224538203
     # mint 52980 92100 100000000000 92884678893 1667302813453 1573153132015 529634421680 24850 274450166607934908532224538203
@@ -388,18 +390,18 @@ function test()
     stake 1
 
     echo "==> 4 swap"
-    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    #depositToken depositAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
     swap $token0 100000000000 100000000000 658322113914 529634421680 14808 166123716848874888729218662825 999999800000000000 999999056851511853
 
     echo "==> 5 swap"
-    #depostToken depostAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
+    #depositToken depositAmount amountIn amountOutMinimum ### liquidity tickCurrent sqrtRatioX96 token0BalanceAmount token1BalanceAmount
     swap $token1 200300000000 200300000000 34999517311 529634421680 18116 195996761539654227777570705349 999999838499469043 999998856551511853
 
     # sleep 120
 
     echo "==> 6 mint"
-    depost $token0 2340200000000
-    depost $token1 12026457043801
+    deposit $token0 2340200000000
+    deposit $token1 12026457043801
     #tickLower tickUpper amount0Desired amount0Min amount1Desired amount1Min ### liquidity tickCurrent sqrtRatioX96
     mint -16080 92220 2340200000000 2228546458622 12026457043801 11272984126445 6464892363717 18116 195996761539654227777570705349
 
@@ -413,6 +415,14 @@ function test()
     unstake 1 &
 
     unstake 2
+
+    dfx canister call $farmId finishManually
+
+    sleep 20
+
+    dfx canister call $farmId getAvgAPR
+    dfx canister call $farmId restartManually
+    dfx canister call $farmId getAvgAPR
 
     echo "==> withdraw reward fee"
     withdraw_reward_fee
