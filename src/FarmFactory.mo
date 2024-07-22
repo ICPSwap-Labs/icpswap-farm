@@ -40,7 +40,6 @@ shared (initMsg) actor class FarmFactory(
         update_settings : { canister_id : Principal; settings : { controllers : [Principal]; } } -> ();
     };
     private let _farmIndexAct = actor (Principal.toText(farmIndexCid)) : actor {
-        updatePrincipalRecord : shared (principalRecord : [Principal]) -> async ();
         addFarmIndex : shared (input : Types.AddFarmIndexArgs) -> async ();
     };
 
