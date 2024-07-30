@@ -270,6 +270,9 @@ shared (initMsg) actor class Farm(
           amount = 0;
           liquidity = positionInfo.liquidity;
         });
+
+        ignore Timer.setTimer<system>(#seconds (5), _updateUserInfo);
+
         return #ok("Staked successfully");
       };
       case (#err(msg)) {
@@ -347,6 +350,8 @@ shared (initMsg) actor class Farm(
           };
         };
 
+        ignore Timer.setTimer<system>(#seconds (5), _updateUserInfo);
+
         return #ok("Unstaked successfully");
       };
       case (msg) {
@@ -402,7 +407,6 @@ shared (initMsg) actor class Farm(
   public shared (msg) func restartManually() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     _status := #LIVE;
-    _avgAPR := 0;
     await _farmIndexAct.updateFarmStatus(_status);
     return #ok("Restart farm successfully");
   };
@@ -547,7 +551,6 @@ shared (initMsg) actor class Farm(
     Timer.cancelTimer(_distributeRewardPerCycle);
     Timer.cancelTimer(_syncPoolMetaPer60s);
     Timer.cancelTimer(_updateStatusPer60s);
-    Timer.cancelTimer(_updateUserInfoPer120s);
     Timer.cancelTimer(_updateTVLPer10m);
     Timer.cancelTimer(_updateRewardTokenFeePer1h);
     Timer.cancelTimer(_updateAPRPer30m);
@@ -555,7 +558,7 @@ shared (initMsg) actor class Farm(
     if (balance > _rewardTokenFee) {
       var amount = balance - _rewardTokenFee;
       try {
-        switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.refunder; subaccount = null }; amount = amount; fee = ?_totalRewardFee; memo = null; created_at_time = null })) {
+        switch (await _rewardTokenAdapter.transfer({ from = { owner = Principal.fromActor(this); subaccount = null }; from_subaccount = null; to = { owner = initArgs.refunder; subaccount = null }; amount = amount; fee = ?_rewardTokenFee; memo = null; created_at_time = null })) {
           case (#Ok(index)) {
             await _farmIndexAct.updateFarmStatus(#CLOSED);
             await _farmIndexAct.updateFarmTVL({
@@ -714,11 +717,11 @@ shared (initMsg) actor class Farm(
     };
   };
 
-  public query (msg) func getUserRewardBalance(owner : Principal) : async Result.Result<Nat, Types.Error> {
+  public query func getUserRewardBalance(owner : Principal) : async Result.Result<Nat, Types.Error> {
     return #ok(_rewardTokenHolderService.getBalance(owner));
   };
   
-  public query (msg) func getUserRewardBalances(offset : Nat, limit : Nat) : async Result.Result<Types.Page<(Principal, Nat)>, Types.Error> {
+  public query func getUserRewardBalances(offset : Nat, limit : Nat) : async Result.Result<Types.Page<(Principal, Nat)>, Types.Error> {
     let resultArr : Buffer.Buffer<(Principal, Nat)> = Buffer.Buffer<(Principal, Nat)>(0);
     var begin : Nat = 0;
     label l {
@@ -853,21 +856,21 @@ shared (initMsg) actor class Farm(
     });
   };
 
-  public shared (msg) func getRewardTokenBalance() : async Nat {
+  public shared func getRewardTokenBalance() : async Nat {
     return await _rewardTokenAdapter.balanceOf({
       owner = Principal.fromActor(this);
       subaccount = null;
     });
   };
 
-  public shared (msg) func getPoolMeta() : async { sqrtPriceX96 : Nat; tick : Int; } {
+  public query func getPoolMeta() : async { sqrtPriceX96 : Nat; tick : Int; } {
     return {
       sqrtPriceX96 = _poolMetadata.sqrtPriceX96;
       tick = _poolMetadata.tick;
     };
   };
 
-  public query (msg) func getTransferLogs() : async Result.Result<[Types.TransferLog], Types.Error> {
+  public query func getTransferLogs() : async Result.Result<[Types.TransferLog], Types.Error> {
       return #ok(Iter.toArray(_transferLog.vals()));
   };
 
@@ -1352,7 +1355,6 @@ shared (initMsg) actor class Farm(
   let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
   let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(60), _syncPoolMeta);
   let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(60), _updateStatus);
-  let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(120), _updateUserInfo);
   let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(600), _updateTVL);
   let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(3600), _updateRewardTokenFee);
   let _updateAPRPer30m = Timer.recurringTimer<system>(#seconds(1800), _updateAPR);
@@ -1361,7 +1363,6 @@ shared (initMsg) actor class Farm(
   // let _distributeRewardPerCycle = Timer.recurringTimer<system>(#seconds(initArgs.secondPerCycle), _distributeReward);
   // let _syncPoolMetaPer60s = Timer.recurringTimer<system>(#seconds(10), _syncPoolMeta);
   // let _updateStatusPer60s = Timer.recurringTimer<system>(#seconds(10), _updateStatus);
-  // let _updateUserInfoPer120s = Timer.recurringTimer<system>(#seconds(10), _updateUserInfo);
   // let _updateTVLPer10m = Timer.recurringTimer<system>(#seconds(10), _updateTVL);
   // let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(10), _updateRewardTokenFee);
   // let _updateAPRPer30m = Timer.recurringTimer<system>(#seconds(10), _updateAPR);

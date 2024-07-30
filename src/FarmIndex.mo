@@ -247,6 +247,7 @@ shared (initMsg) actor class FarmIndex(
             };
         };
         var liveFarms = TrieSet.toArray(_liveFarmSet);
+        if (Nat.equal(farms.size(), 0) or Nat.equal(liveFarms.size(), 0)) { return #ok([]); };
         var matchedFarms = Option.get(_intersectArrays(?Buffer.toArray(farms), ?liveFarms), []);
 
         var poolFarms = Buffer.Buffer<(Principal, Principal)>(0);
