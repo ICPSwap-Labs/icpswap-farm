@@ -13,6 +13,7 @@ import Types "./Types";
 shared (initMsg) actor class FarmFactoryValidator(
     farmFactoryCid : Principal,
     governanceCid : Principal,
+    farmIndexCid : Principal,
 ) = this {
 
     public type Result = {
@@ -31,6 +32,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     private stable var THIRTY_MINUTES : Nat = 1800;
 
     private var _farmFactoryAct = actor (Principal.toText(farmFactoryCid)) : Types.IFarmFactory;
+    private var _farmIndexAct = actor (Principal.toText(farmIndexCid)) : Types.IFarmIndex;
 
     public shared (msg) func createValidate(args : Types.CreateFarmArgs) : async Result {
         assert (Principal.equal(msg.caller, governanceCid));
@@ -117,6 +119,10 @@ shared (initMsg) actor class FarmFactoryValidator(
         return #Ok(debug_show (farmCid) # ", " # debug_show (controllers));
     };
 
+    public shared func checkFarm(farmCid : Principal) : async Bool {
+        await _checkFarm(farmCid);
+    };
+
     public query func getInitArgs() : async Result.Result<{ farmFactoryCid : Principal; governanceCid : Principal }, Types.Error> {
         #ok({
             farmFactoryCid = farmFactoryCid;
@@ -133,7 +139,7 @@ shared (initMsg) actor class FarmFactoryValidator(
 
     // --------------------------- Version Control ------------------------------------
 
-    private var _version : Text = "3.2.1";
+    private var _version : Text = "3.2.2";
 
     public query func getVersion() : async Text { _version };
 
@@ -142,7 +148,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     };
 
     private func _checkFarm(farmCid : Principal) : async Bool {
-        switch (await _farmFactoryAct.getAllFarms()) {
+        switch (await _farmIndexAct.getFarms(null)) {
             case (#ok(farms)) {
                 for (it in farms.vals()) {
                     if (Principal.equal(farmCid, it)) {
