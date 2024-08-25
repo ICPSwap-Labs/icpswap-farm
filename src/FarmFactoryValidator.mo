@@ -35,7 +35,7 @@ shared (initMsg) actor class FarmFactoryValidator(
     public shared (msg) func createValidate(args : Types.CreateFarmArgs) : async Result {
         assert (Principal.equal(msg.caller, governanceCid));
 
-        if (not _checkStandard(args.rewardToken.standard)) { return #err("Wrong rewardToken standard."); };
+        if (not _checkStandard(args.rewardToken.standard)) { return #Err("Wrong rewardToken standard."); };
 
         var nowTime = _getTime();
         if (args.rewardAmount <= 0) {
