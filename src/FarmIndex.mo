@@ -432,7 +432,7 @@ shared (initMsg) actor class FarmIndex(
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.2.0";
+    private var _version : Text = "3.2.1";
     public query func getVersion() : async Text { _version };
 
     system func preupgrade() {
