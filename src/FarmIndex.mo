@@ -48,6 +48,22 @@ shared (initMsg) actor class FarmIndex(
         if (not CollectionUtils.arrayContains(_farms, msg.caller, Principal.equal)) {
             return;
         };
+        var userBefore = _farmUsers.get(msg.caller);
+        switch (userBefore) {
+            case(?userBefore) {
+                var difference : Buffer.Buffer<Principal> = Buffer.Buffer<Principal>(0);
+                for (u in userBefore.vals()) {
+                    if (not CollectionUtils.arrayContains(users, u, Principal.equal)) { difference.add(u); };
+                };
+                for (u in difference.vals()) {
+                    switch (_userFarms.get(u)) {
+                        case (?farmArray) { _userFarms.put(u, CollectionUtils.arrayRemove(farmArray, msg.caller, Principal.equal)); };
+                        case (_) {};
+                    };
+                }
+            };
+            case(null) {};
+        };
         for (user in users.vals()) {
             var tempFarmIds = TrieSet.empty<Principal>();
             var currentFarmIdList = switch (_userFarms.get(user)) { case (?list) { list }; case (_) { [] }; };
