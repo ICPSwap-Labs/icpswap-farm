@@ -301,6 +301,10 @@ module {
         #transferAll : () -> (Token, Principal);
     };
 
+    public type IFarmIndex = actor {
+        getFarms : query (?FarmStatus) -> async Result.Result<[Principal], Text>;
+    };
+
     public type IFarmFactory = actor {
         create : shared CreateFarmArgs -> async Result.Result<Text, Text>;
         setAdmins : shared [Principal] -> async ();
