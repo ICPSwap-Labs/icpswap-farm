@@ -49,6 +49,8 @@ shared (initMsg) actor class FarmFactory(
     public shared (msg) func create(args : Types.CreateFarmArgs) : async Result.Result<Text, Text> {
         _checkAdminPermission(msg.caller);
 
+        if (not _checkStandard(args.rewardToken.standard)) { return #err("Wrong rewardToken standard."); };
+
         var nowTime = _getTime();
         if (args.rewardAmount <= 0) {
             return #err("Reward amount must be positive");
@@ -213,6 +215,22 @@ shared (initMsg) actor class FarmFactory(
             };
         };
         IC0.update_settings({ canister_id = farmCid; settings = { controllers = Buffer.toArray<Principal>(buffer) }; });
+    };
+
+    private func _checkStandard(standard : Text) : Bool {
+        if (
+            Text.notEqual(standard, "DIP20") 
+            and Text.notEqual(standard, "DIP20-WICP") 
+            and Text.notEqual(standard, "DIP20-XTC") 
+            and Text.notEqual(standard, "EXT") 
+            and Text.notEqual(standard, "ICRC1") 
+            and Text.notEqual(standard, "ICRC2") 
+            and Text.notEqual(standard, "ICRC3") 
+            and Text.notEqual(standard, "ICP")
+        ) {
+            return false;
+        };
+        return true;
     };
 
     private func _checkFarmControllers(controllers : [Principal]) : Bool {

@@ -35,6 +35,8 @@ shared (initMsg) actor class FarmFactoryValidator(
     public shared (msg) func createValidate(args : Types.CreateFarmArgs) : async Result {
         assert (Principal.equal(msg.caller, governanceCid));
 
+        if (not _checkStandard(args.rewardToken.standard)) { return #Err("Wrong rewardToken standard."); };
+
         var nowTime = _getTime();
         if (args.rewardAmount <= 0) {
             return #Err("Reward amount must be positive");
@@ -153,5 +155,21 @@ shared (initMsg) actor class FarmFactoryValidator(
                 return false;
             };
         };
+    };
+
+    private func _checkStandard(standard : Text) : Bool {
+        if (
+            Text.notEqual(standard, "DIP20") 
+            and Text.notEqual(standard, "DIP20-WICP") 
+            and Text.notEqual(standard, "DIP20-XTC") 
+            and Text.notEqual(standard, "EXT") 
+            and Text.notEqual(standard, "ICRC1") 
+            and Text.notEqual(standard, "ICRC2") 
+            and Text.notEqual(standard, "ICRC3") 
+            and Text.notEqual(standard, "ICP")
+        ) {
+            return false;
+        };
+        return true;
     };
 };
