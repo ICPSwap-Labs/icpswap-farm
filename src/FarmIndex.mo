@@ -297,7 +297,7 @@ shared (initMsg) actor class FarmIndex(
             and Option.isNull(condition.user) 
             and Option.isNull(condition.status)
         ) {
-            return #ok(_farms);
+            return #ok(Array.reverse(_farms));
         };
         
         var rewardTokenFarms = switch (condition.rewardToken) {
