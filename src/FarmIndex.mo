@@ -1,3 +1,4 @@
+import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 import Cycles "mo:base/ExperimentalCycles";
 import Time "mo:base/Time";
@@ -179,26 +180,26 @@ shared (initMsg) actor class FarmIndex(
 
     public query func getFarms(status : ?Types.FarmStatus) : async Result.Result<[Principal], Text> {
         switch (status) {
-            case (? #NOT_STARTED) { return #ok(TrieSet.toArray(_notStartedFarmSet)); };
-            case (? #LIVE) { return #ok(TrieSet.toArray(_liveFarmSet)) };
-            case (? #FINISHED) { return #ok(TrieSet.toArray(_finishedFarmSet)) };
-            case (? #CLOSED) { return #ok(TrieSet.toArray(_closedFarmSet)) };
-            case (null) { return #ok(_farms) };
+            case (? #NOT_STARTED) { return #ok(Array.reverse(TrieSet.toArray(_notStartedFarmSet))); };
+            case (? #LIVE) { return #ok(Array.reverse(TrieSet.toArray(_liveFarmSet))); };
+            case (? #FINISHED) { return #ok(Array.reverse(TrieSet.toArray(_finishedFarmSet))); };
+            case (? #CLOSED) { return #ok(Array.reverse(TrieSet.toArray(_closedFarmSet))); };
+            case (null) { return #ok(Array.reverse(_farms)); };
         };
     };
 
     public query func getAllFarms() : async Result.Result<{ NOT_STARTED : [Principal]; LIVE : [Principal]; FINISHED : [Principal]; CLOSED : [Principal] }, Text> {
         return #ok({
-            NOT_STARTED = TrieSet.toArray(_notStartedFarmSet);
-            LIVE = TrieSet.toArray(_liveFarmSet);
-            FINISHED = TrieSet.toArray(_finishedFarmSet);
-            CLOSED = TrieSet.toArray(_closedFarmSet);
+            NOT_STARTED = Array.reverse(TrieSet.toArray(_notStartedFarmSet));
+            LIVE = Array.reverse(TrieSet.toArray(_liveFarmSet));
+            FINISHED = Array.reverse(TrieSet.toArray(_finishedFarmSet));
+            CLOSED = Array.reverse(TrieSet.toArray(_closedFarmSet));
         });
     };
 
     public query func getUserFarms(user : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_userFarms.get(user)) {
-            case (?farmArray) { return #ok(farmArray) };
+            case (?farmArray) { return #ok(Array.reverse(farmArray)); };
             case (_) { return #ok([]) };
         };
     };
@@ -209,7 +210,7 @@ shared (initMsg) actor class FarmIndex(
 
     public query func getFarmUsers(farm : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_farmUsers.get(farm)) {
-            case (?userArray) { return #ok(userArray) };
+            case (?userArray) { return #ok(userArray); };
             case (_) { return #ok([]) };
         };
     };
@@ -220,7 +221,7 @@ shared (initMsg) actor class FarmIndex(
 
     public query func getFarmsByPool(pool : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_poolFarms.get(pool)) {
-            case (?farmArray) { return #ok(farmArray) };
+            case (?farmArray) { return #ok(Array.reverse(farmArray)); };
             case (_) { return #ok([]) };
         };
     };
@@ -275,7 +276,7 @@ shared (initMsg) actor class FarmIndex(
                 case (_) {};
             };
         };
-        return #ok(Buffer.toArray(poolFarms));
+        return #ok(Array.reverse(Buffer.toArray(poolFarms)));
     };
 
     public query func getAllPoolFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
@@ -284,7 +285,7 @@ shared (initMsg) actor class FarmIndex(
 
     public query func getFarmsByRewardToken(rewardToken : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_rewardTokenFarms.get(rewardToken)) {
-            case (?farmArray) { return #ok(farmArray) };
+            case (?farmArray) { return #ok(Array.reverse(farmArray)); };
             case (_) { return #ok([]) };
         };
     };
@@ -296,7 +297,7 @@ shared (initMsg) actor class FarmIndex(
             and Option.isNull(condition.user) 
             and Option.isNull(condition.status)
         ) {
-            return #ok(_farms);
+            return #ok(Array.reverse(_farms));
         };
         
         var rewardTokenFarms = switch (condition.rewardToken) {
@@ -324,7 +325,7 @@ shared (initMsg) actor class FarmIndex(
             case (_) { null };
         };
 
-        return #ok(Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), []));
+        return #ok(Array.reverse(Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), [])));
     };
 
     public query func getAllRewardTokenFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
@@ -400,7 +401,7 @@ shared (initMsg) actor class FarmIndex(
                 };
             };
         };
-        return Buffer.toArray(farmRewardInfos);
+        return Array.reverse(Buffer.toArray(farmRewardInfos));
     };
 
     private func _intersectArrays(arr1 : ?[Principal], arr2 : ?[Principal]) : ?[Principal] {
@@ -460,98 +461,98 @@ shared (initMsg) actor class FarmIndex(
     // };
 
     // sync old farm tvl and reward info, remove after initialization of the data
-    public shared (msg) func syncHisData(farmCid : Principal, initTime : Nat) : async Text {
-        assert (Prim.isController(msg.caller));
+    // public shared (msg) func syncHisData(farmCid : Principal, initTime : Nat) : async Text {
+    //     assert (Prim.isController(msg.caller));
 
-        let farmAct = actor (Principal.toText(farmCid)) : actor {
-            // reward token info and reward token amount 
-            getFarmInfo : query (user : Text) -> async Result.Result<{
-                rewardToken : Types.Token;
-                pool : Principal;
-                poolToken0 : Types.Token;
-                poolToken1 : Types.Token;
-                poolFee : Nat;
-                startTime : Nat;
-                endTime : Nat;
-                refunder : Principal;
-                totalReward : Nat;
-                totalRewardBalance : Nat;
-                totalRewardHarvested : Nat;
-                totalRewardUnharvested : Nat;
-                numberOfStakes : Nat;
-                userNumberOfStakes : Nat;
-                status : Types.FarmStatus;
-                creator : Principal;
-                positionIds : [Nat];
-            }, Types.Error>;
-            // farm principal record
-            getStakeRecord : query (offset : Nat, limit : Nat, from : Text) -> async Result.Result<Types.Page<Types.StakeRecord>, Text>;
-        };
-        var principalSet = TrieSet.empty<Principal>();
-        switch (await farmAct.getStakeRecord(0, 100000, "")) {
-            case (#ok(stakeRecord)) {
-                for (r in stakeRecord.content.vals()) {
-                    if (r.transType == #stake) {
-                        principalSet := TrieSet.put<Principal>(principalSet, r.from, Principal.hash(r.from), Principal.equal);
-                    };
-                };
-            };
-            case (#err(msg)) { };
-        };
+    //     let farmAct = actor (Principal.toText(farmCid)) : actor {
+    //         // reward token info and reward token amount 
+    //         getFarmInfo : query (user : Text) -> async Result.Result<{
+    //             rewardToken : Types.Token;
+    //             pool : Principal;
+    //             poolToken0 : Types.Token;
+    //             poolToken1 : Types.Token;
+    //             poolFee : Nat;
+    //             startTime : Nat;
+    //             endTime : Nat;
+    //             refunder : Principal;
+    //             totalReward : Nat;
+    //             totalRewardBalance : Nat;
+    //             totalRewardHarvested : Nat;
+    //             totalRewardUnharvested : Nat;
+    //             numberOfStakes : Nat;
+    //             userNumberOfStakes : Nat;
+    //             status : Types.FarmStatus;
+    //             creator : Principal;
+    //             positionIds : [Nat];
+    //         }, Types.Error>;
+    //         // farm principal record
+    //         getStakeRecord : query (offset : Nat, limit : Nat, from : Text) -> async Result.Result<Types.Page<Types.StakeRecord>, Text>;
+    //     };
+    //     var principalSet = TrieSet.empty<Principal>();
+    //     switch (await farmAct.getStakeRecord(0, 100000, "")) {
+    //         case (#ok(stakeRecord)) {
+    //             for (r in stakeRecord.content.vals()) {
+    //                 if (r.transType == #stake) {
+    //                     principalSet := TrieSet.put<Principal>(principalSet, r.from, Principal.hash(r.from), Principal.equal);
+    //                 };
+    //             };
+    //         };
+    //         case (#err(msg)) { };
+    //     };
 
-        switch (await farmAct.getFarmInfo("")) {
-            case (#ok(info)) {
-                var tempFarmIds = Buffer.Buffer<Principal>(0);
-                for (z in _farms.vals()) { tempFarmIds.add(z) };
-                tempFarmIds.add(farmCid);
-                _farms := Buffer.toArray(tempFarmIds);
+    //     switch (await farmAct.getFarmInfo("")) {
+    //         case (#ok(info)) {
+    //             var tempFarmIds = Buffer.Buffer<Principal>(0);
+    //             for (z in _farms.vals()) { tempFarmIds.add(z) };
+    //             tempFarmIds.add(farmCid);
+    //             _farms := Buffer.toArray(tempFarmIds);
 
-                tempFarmIds := Buffer.Buffer<Principal>(0);
-                var poolFarmIds = switch (_poolFarms.get(info.pool)) { case (?list) { list }; case (_) { [] }; };
-                for (z in poolFarmIds.vals()) { tempFarmIds.add(z) };
-                tempFarmIds.add(farmCid);
-                _poolFarms.put(info.pool, Buffer.toArray(tempFarmIds));
+    //             tempFarmIds := Buffer.Buffer<Principal>(0);
+    //             var poolFarmIds = switch (_poolFarms.get(info.pool)) { case (?list) { list }; case (_) { [] }; };
+    //             for (z in poolFarmIds.vals()) { tempFarmIds.add(z) };
+    //             tempFarmIds.add(farmCid);
+    //             _poolFarms.put(info.pool, Buffer.toArray(tempFarmIds));
 
-                tempFarmIds := Buffer.Buffer<Principal>(0);
-                var rewardTokenFarmIds = switch (_rewardTokenFarms.get(Principal.fromText(info.rewardToken.address))) {
-                    case (?list) { list }; case (_) { [] };
-                };
-                for (z in rewardTokenFarmIds.vals()) { tempFarmIds.add(z) };
-                tempFarmIds.add(farmCid);
-                _rewardTokenFarms.put(Principal.fromText(info.rewardToken.address), Buffer.toArray(tempFarmIds));
+    //             tempFarmIds := Buffer.Buffer<Principal>(0);
+    //             var rewardTokenFarmIds = switch (_rewardTokenFarms.get(Principal.fromText(info.rewardToken.address))) {
+    //                 case (?list) { list }; case (_) { [] };
+    //             };
+    //             for (z in rewardTokenFarmIds.vals()) { tempFarmIds.add(z) };
+    //             tempFarmIds.add(farmCid);
+    //             _rewardTokenFarms.put(Principal.fromText(info.rewardToken.address), Buffer.toArray(tempFarmIds));
 
-                _farmRewardInfos.put(
-                    farmCid,
-                    {
-                        initTime = initTime;
-                        pool = info.pool;
-                        poolToken0TVL = {
-                            address = Principal.fromText(info.poolToken0.address);
-                            standard = info.poolToken0.standard;
-                            amount = 0;
-                        };
-                        poolToken1TVL = {
-                            address = Principal.fromText(info.poolToken1.address);
-                            standard = info.poolToken1.standard;
-                            amount = 0;
-                        };
-                        totalReward = {
-                            address = Principal.fromText(info.rewardToken.address);
-                            standard = info.rewardToken.standard;
-                            amount = info.totalReward;
-                        };
-                    },
-                );
+    //             _farmRewardInfos.put(
+    //                 farmCid,
+    //                 {
+    //                     initTime = initTime;
+    //                     pool = info.pool;
+    //                     poolToken0TVL = {
+    //                         address = Principal.fromText(info.poolToken0.address);
+    //                         standard = info.poolToken0.standard;
+    //                         amount = 0;
+    //                     };
+    //                     poolToken1TVL = {
+    //                         address = Principal.fromText(info.poolToken1.address);
+    //                         standard = info.poolToken1.standard;
+    //                         amount = 0;
+    //                     };
+    //                     totalReward = {
+    //                         address = Principal.fromText(info.rewardToken.address);
+    //                         standard = info.rewardToken.standard;
+    //                         amount = info.totalReward;
+    //                     };
+    //                 },
+    //             );
 
-                _closedFarmSet := TrieSet.put<Principal>(_closedFarmSet, farmCid, Principal.hash(farmCid), Principal.equal);
-                _principalRecordSet := TrieSet.union<Principal>(_principalRecordSet, principalSet, Principal.equal);
+    //             _closedFarmSet := TrieSet.put<Principal>(_closedFarmSet, farmCid, Principal.hash(farmCid), Principal.equal);
+    //             _principalRecordSet := TrieSet.union<Principal>(_principalRecordSet, principalSet, Principal.equal);
 
-                return "ok";
-            };
-            case (#err(msg)) {
-                return debug_show(msg);
-            };
-        };
-    };
+    //             return "ok";
+    //         };
+    //         case (#err(msg)) {
+    //             return debug_show(msg);
+    //         };
+    //     };
+    // };
 
 };
