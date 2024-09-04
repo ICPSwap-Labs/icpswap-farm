@@ -324,8 +324,18 @@ shared (initMsg) actor class FarmIndex(
             }; 
             case (_) { null };
         };
+        var result = Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), []);
 
-        return #ok(Array.reverse(Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), [])));
+        var nonNullParamsCount : Nat = 0;
+        if (not Option.isNull(condition.rewardToken)) nonNullParamsCount := nonNullParamsCount + 1;
+        if (not Option.isNull(condition.pool)) nonNullParamsCount := nonNullParamsCount + 1;
+        if (not Option.isNull(condition.user)) nonNullParamsCount := nonNullParamsCount + 1;
+        if (not Option.isNull(condition.status)) nonNullParamsCount := nonNullParamsCount + 1;
+
+        if (Nat.equal(nonNullParamsCount, 1) or Nat.equal(nonNullParamsCount, 3)) {
+            result := Array.reverse(result);
+        };
+        return #ok(result);
     };
 
     public query func getAllRewardTokenFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
