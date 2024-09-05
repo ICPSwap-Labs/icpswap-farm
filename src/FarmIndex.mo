@@ -320,22 +320,11 @@ shared (initMsg) actor class FarmIndex(
                         case (#CLOSED) { farms.append(Buffer.fromArray(TrieSet.toArray(_closedFarmSet))); };
                     };
                 };
-                ?Buffer.toArray(farms);
+                ?Array.reverse(Buffer.toArray(farms));
             }; 
             case (_) { null };
         };
-        var result = Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), []);
-
-        var nonNullParamsCount : Nat = 0;
-        if (not Option.isNull(condition.rewardToken)) nonNullParamsCount := nonNullParamsCount + 1;
-        if (not Option.isNull(condition.pool)) nonNullParamsCount := nonNullParamsCount + 1;
-        if (not Option.isNull(condition.user)) nonNullParamsCount := nonNullParamsCount + 1;
-        if (not Option.isNull(condition.status)) nonNullParamsCount := nonNullParamsCount + 1;
-
-        if (Nat.equal(nonNullParamsCount, 1) or Nat.equal(nonNullParamsCount, 3)) {
-            result := Array.reverse(result);
-        };
-        return #ok(result);
+        return #ok(Array.reverse(Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), [])));
     };
 
     public query func getAllRewardTokenFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
@@ -420,16 +409,16 @@ shared (initMsg) actor class FarmIndex(
             case (null, ?arr) { return ?arr; };
             case (?arr, null) { return ?arr; };
             case (?arr1, ?arr2) {
-                var intersection = TrieSet.empty<Principal>();
+                var intersection = Buffer.Buffer<Principal>(0);
                 for (f1 in arr1.vals()) {
                     label l for (f2 in arr2.vals()) {
                         if (Principal.equal(f1, f2)) {
-                            intersection := TrieSet.put<Principal>(intersection, f1, Principal.hash(f1), Principal.equal);
+                            intersection.add(f1);
                             break l;
                         };
                     };
                 };
-                return ?TrieSet.toArray<Principal>(intersection);
+                return ?Buffer.toArray<Principal>(intersection);
             };
         };
     };
