@@ -180,26 +180,26 @@ shared (initMsg) actor class FarmIndex(
 
     public query func getFarms(status : ?Types.FarmStatus) : async Result.Result<[Principal], Text> {
         switch (status) {
-            case (? #NOT_STARTED) { return #ok(Array.reverse(TrieSet.toArray(_notStartedFarmSet))); };
-            case (? #LIVE) { return #ok(Array.reverse(TrieSet.toArray(_liveFarmSet))); };
-            case (? #FINISHED) { return #ok(Array.reverse(TrieSet.toArray(_finishedFarmSet))); };
-            case (? #CLOSED) { return #ok(Array.reverse(TrieSet.toArray(_closedFarmSet))); };
-            case (null) { return #ok(Array.reverse(_farms)); };
+            case (? #NOT_STARTED) { return #ok(_orderFarmByInitTime(TrieSet.toArray(_notStartedFarmSet))); };
+            case (? #LIVE) { return #ok(_orderFarmByInitTime(TrieSet.toArray(_liveFarmSet))); };
+            case (? #FINISHED) { return #ok(_orderFarmByInitTime(TrieSet.toArray(_finishedFarmSet))); };
+            case (? #CLOSED) { return #ok(_orderFarmByInitTime(TrieSet.toArray(_closedFarmSet))); };
+            case (null) { return #ok(_orderFarmByInitTime(_farms)); };
         };
     };
 
     public query func getAllFarms() : async Result.Result<{ NOT_STARTED : [Principal]; LIVE : [Principal]; FINISHED : [Principal]; CLOSED : [Principal] }, Text> {
         return #ok({
-            NOT_STARTED = Array.reverse(TrieSet.toArray(_notStartedFarmSet));
-            LIVE = Array.reverse(TrieSet.toArray(_liveFarmSet));
-            FINISHED = Array.reverse(TrieSet.toArray(_finishedFarmSet));
-            CLOSED = Array.reverse(TrieSet.toArray(_closedFarmSet));
+            NOT_STARTED = _orderFarmByInitTime(TrieSet.toArray(_notStartedFarmSet));
+            LIVE = _orderFarmByInitTime(TrieSet.toArray(_liveFarmSet));
+            FINISHED = _orderFarmByInitTime(TrieSet.toArray(_finishedFarmSet));
+            CLOSED = _orderFarmByInitTime(TrieSet.toArray(_closedFarmSet));
         });
     };
 
     public query func getUserFarms(user : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_userFarms.get(user)) {
-            case (?farmArray) { return #ok(Array.reverse(farmArray)); };
+            case (?farmArray) { return #ok(_orderFarmByInitTime(farmArray)); };
             case (_) { return #ok([]) };
         };
     };
@@ -221,7 +221,7 @@ shared (initMsg) actor class FarmIndex(
 
     public query func getFarmsByPool(pool : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_poolFarms.get(pool)) {
-            case (?farmArray) { return #ok(Array.reverse(farmArray)); };
+            case (?farmArray) { return #ok(_orderFarmByInitTime(farmArray)); };
             case (_) { return #ok([]) };
         };
     };
@@ -265,7 +265,7 @@ shared (initMsg) actor class FarmIndex(
         };
         var liveFarms = TrieSet.toArray(_liveFarmSet);
         if (Nat.equal(farms.size(), 0) or Nat.equal(liveFarms.size(), 0)) { return #ok([]); };
-        var matchedFarms = Option.get(_intersectArrays(?Buffer.toArray(farms), ?liveFarms), []);
+        var matchedFarms = _orderFarmByInitTime(Option.get(_intersectArrays(?Buffer.toArray(farms), ?liveFarms), []));
 
         var poolFarms = Buffer.Buffer<(Principal, Principal)>(0);
         for (farm in matchedFarms.vals()) {
@@ -276,7 +276,7 @@ shared (initMsg) actor class FarmIndex(
                 case (_) {};
             };
         };
-        return #ok(Array.reverse(Buffer.toArray(poolFarms)));
+        return #ok(Buffer.toArray(poolFarms));
     };
 
     public query func getAllPoolFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
@@ -285,7 +285,7 @@ shared (initMsg) actor class FarmIndex(
 
     public query func getFarmsByRewardToken(rewardToken : Principal) : async Result.Result<[Principal], Types.Error> {
         switch (_rewardTokenFarms.get(rewardToken)) {
-            case (?farmArray) { return #ok(Array.reverse(farmArray)); };
+            case (?farmArray) { return #ok(_orderFarmByInitTime(farmArray)); };
             case (_) { return #ok([]) };
         };
     };
@@ -297,7 +297,7 @@ shared (initMsg) actor class FarmIndex(
             and Option.isNull(condition.user) 
             and Option.isNull(condition.status)
         ) {
-            return #ok(Array.reverse(_farms));
+            return #ok(_orderFarmByInitTime(_farms));
         };
         
         var rewardTokenFarms = switch (condition.rewardToken) {
@@ -320,11 +320,12 @@ shared (initMsg) actor class FarmIndex(
                         case (#CLOSED) { farms.append(Buffer.fromArray(TrieSet.toArray(_closedFarmSet))); };
                     };
                 };
-                ?Array.reverse(Buffer.toArray(farms));
+                ?Buffer.toArray(farms);
             }; 
             case (_) { null };
         };
-        return #ok(Array.reverse(Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), [])));
+        var tempResult = Option.get(_intersectArrays(_intersectArrays(_intersectArrays(rewardTokenFarms, poolFarms), userFarms), farmsWithStatus), []);
+        return #ok(_orderFarmByInitTime(tempResult));
     };
 
     public query func getAllRewardTokenFarms() : async Result.Result<[(Principal, [Principal])], Types.Error> {
@@ -372,6 +373,26 @@ shared (initMsg) actor class FarmIndex(
             available = Cycles.available();
         });
     };
+    
+    private func _farmRewardInfoCompare((_, x_value) : (Principal, Types.FarmRewardInfo), (_, y_value) : (Principal, Types.FarmRewardInfo)) : { #less; #equal; #greater } {
+        if (x_value.initTime < y_value.initTime) { #less } else if (x_value.initTime == y_value.initTime) { #equal } else { #greater };
+    };
+
+    private func _orderFarmByInitTime(farmIds : [Principal]) : [Principal] {
+        var tempResultBuffer = Buffer.Buffer<(Principal, Types.FarmRewardInfo)>(0);
+        for (r in farmIds.vals()) {
+            switch (_farmRewardInfos.get(r)) {
+                case(?info){ tempResultBuffer.add((r, info)); };
+                case(_){};
+            };
+        };
+        var tempResultInfo = Array.sort(Buffer.toArray(tempResultBuffer), _farmRewardInfoCompare);
+        var resultBuffer = Buffer.Buffer<Principal>(0);
+        for ((key, value) in tempResultInfo.vals()) {
+            resultBuffer.add(key);
+        };
+        return Array.reverse(Buffer.toArray(resultBuffer));
+    };
 
     private func _getFarmRewardTokenInfos(status : Types.FarmStatus) : [(Principal, Types.FarmRewardInfo)] {
         var farmRewardInfos = Buffer.Buffer<(Principal, Types.FarmRewardInfo)>(0);
@@ -400,7 +421,7 @@ shared (initMsg) actor class FarmIndex(
                 };
             };
         };
-        return Array.reverse(Buffer.toArray(farmRewardInfos));
+        return Buffer.toArray(farmRewardInfos);
     };
 
     private func _intersectArrays(arr1 : ?[Principal], arr2 : ?[Principal]) : ?[Principal] {
