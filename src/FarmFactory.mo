@@ -260,7 +260,7 @@ shared (initMsg) actor class FarmFactory(
     };
 
     // --------------------------- Version Control ------------------------------------
-    private var _version : Text = "3.2.0";
+    private var _version : Text = "3.2.4";
     public query func getVersion() : async Text { _version };
 
     // --------------------------- LIFE CYCLE -----------------------------------
