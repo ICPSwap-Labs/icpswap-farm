@@ -530,6 +530,77 @@ shared (initMsg) actor class Farm(
     };
   };
 
+  public shared (msg) func refundTokens() : async Result.Result<Text, Types.Error> {
+    _checkAdminPermission(msg.caller);
+    
+    switch (_status) {
+        case (#FINISHED) {};
+        case (_) { return #err(#InternalError("Can only refund tokens when farm is finished")); };
+    };
+    
+    var canisterId = Principal.fromActor(this);
+    var preTransIndexBalanceList : Buffer.Buffer<(Principal, (Nat, Nat))> = Buffer.Buffer<(Principal, (Nat, Nat))>(0);
+    var insufficientFundList : Buffer.Buffer<(Principal, Nat)> = Buffer.Buffer<(Principal, Nat)>(0);
+    
+    // Process balances and create transfer records
+    for ((principal, balance) in _rewardTokenHolderService.getAllBalances().entries()) {
+        if (balance > _rewardTokenFee) {
+            var amount = balance - _rewardTokenFee;
+            var preTransIndex = _preTransfer(principal, canisterId, null, principal, "refund", initArgs.rewardToken, amount, _rewardTokenFee);
+            preTransIndexBalanceList.add((principal, (preTransIndex, balance)));
+        } else {
+            insufficientFundList.add(principal, balance);
+        };
+    };
+
+    // Clear insufficient balances
+    for ((principal, balance) in insufficientFundList.vals()) {
+        ignore _rewardTokenHolderService.withdraw(principal, balance);
+    };
+
+    // Process transfers
+    var passedIndexList : Buffer.Buffer<Nat> = Buffer.Buffer<Nat>(0);
+    var failedIndexList : Buffer.Buffer<(Nat, Text)> = Buffer.Buffer<(Nat, Text)>(0);
+    
+    for ((principal, (preTransIndex, amount)) in preTransIndexBalanceList.vals()) {
+        try {
+            switch (await _rewardTokenAdapter.transfer({
+                from = { owner = canisterId; subaccount = null }; 
+                from_subaccount = null; 
+                to = { owner = principal; subaccount = null }; 
+                amount = amount;
+                fee = ?_rewardTokenFee; 
+                memo = Option.make(_natToBlob(preTransIndex));  
+                created_at_time = null 
+            })) {
+                case (#Ok(_)) { passedIndexList.add(preTransIndex); };
+                case (#Err(msg)) { failedIndexList.add((preTransIndex, debug_show(msg))); };
+            };
+        } catch (e) {
+            failedIndexList.add((preTransIndex, debug_show(Error.message(e))));
+        };
+    };
+
+    // Update balances and transfer logs
+    for ((principal, (preTransIndex, balance)) in preTransIndexBalanceList.vals()) {
+        ignore _rewardTokenHolderService.withdraw(principal, balance);
+    };
+
+    for (preTransIndex in passedIndexList.vals()) {
+        _postTransferComplete(preTransIndex);
+    };
+
+    for ((preTransIndex, msg) in failedIndexList.vals()) {
+        _postTransferError(preTransIndex, msg);
+    };
+
+    if (failedIndexList.size() > 0) {
+        return #err(#InternalError("Some refunds failed. Check transfer logs for details."));
+    };
+
+    return #ok("Refund completed successfully");
+  };
+
   public shared (msg) func close() : async Result.Result<Text, Types.Error> {
     _checkAdminPermission(msg.caller);
     if (_positionIds.size() > 0) {
@@ -863,6 +934,10 @@ shared (initMsg) actor class Farm(
     });
   };
 
+  public shared func isPending() : async Result.Result<Bool, Types.Error> {
+    return #ok(await _isPending());
+  };
+
   public query func getPoolMeta() : async { sqrtPriceX96 : Nat; tick : Int; } {
     return {
       sqrtPriceX96 = _poolMetadata.sqrtPriceX96;
@@ -960,6 +1035,21 @@ shared (initMsg) actor class Farm(
     return #ok({ balance = Cycles.balance(); available = Cycles.available() });
   };
 
+  private func _isPending() : async Bool {
+    if (_status != #NOT_STARTED) { return false; };
+    switch (_canisterId) {
+      case (?cid) {
+        var balance = await _rewardTokenAdapter.balanceOf({ owner = cid; subaccount = null; });
+        if (balance < _totalReward) {
+          return true;
+        } else {
+          return false;
+        };
+      };
+      case (_) { return true; };
+    };
+  };
+
   private func _updateRewardTokenFee() : async () {
     // Debug.print(" ---> _updateRewardTokenFee ");
     try {
@@ -974,19 +1064,10 @@ shared (initMsg) actor class Farm(
     var nowTime = _getTime();
     // check balance
     if (_status == #NOT_STARTED) {
-      switch (_canisterId) {
-        case (?cid) {
-          var balance = await _rewardTokenAdapter.balanceOf({
-            owner = cid;
-            subaccount = null;
-          });
-          if (balance < _totalReward) {
-            _errorLogBuffer.add("_updateStatus failed: balance=" # debug_show (balance) # ", totalReward=" # debug_show (_totalReward) # ".");
-            return;
-          };
-        };
-        case (_) { return };
-      };
+      if (await _isPending()) {
+        _errorLogBuffer.add("_updateStatus failed: InsufficientFunds");
+        return;
+      };  
     };
 
     if (_status != #CLOSED and _status != #FINISHED) {
