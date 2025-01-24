@@ -1448,7 +1448,7 @@ shared (initMsg) actor class Farm(
   // let _updateRewardTokenFeePer1h = Timer.recurringTimer<system>(#seconds(10), _updateRewardTokenFee);
   // let _updateAPRPer30m = Timer.recurringTimer<system>(#seconds(10), _updateAPR);
   // --------------------------- Version Control ------------------------------------
-  private var _version : Text = "3.2.0";
+  private var _version : Text = "3.2.4";
   public query func getVersion() : async Text { _version };
 
   // --------------------------- LIFE CYCLE -----------------------------------
