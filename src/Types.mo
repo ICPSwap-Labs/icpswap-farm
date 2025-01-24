@@ -283,6 +283,8 @@ module {
         #getUserTVL : () -> Principal;
         #getVersion : () -> ();
         #init : () -> ();
+        #isPending : () -> ();
+        #refundTokens : () -> ();
         #removeErrorTransferLog : () -> (Nat, Bool);
         #restartManually : () -> ();
         #sendRewardManually : () -> ();
