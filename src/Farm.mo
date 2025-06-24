@@ -1129,6 +1129,12 @@ shared (initMsg) actor class Farm(
       let token0Amount = Float.div(Float.fromInt(IntUtils.toInt(_TVL.poolToken0.amount, 512)), _token0DecimalsConst);
       let token1Amount = Float.div(Float.fromInt(IntUtils.toInt(_TVL.poolToken1.amount, 512)), _token1DecimalsConst);
       let tvlUSD = Float.mul(token0Amount, token0PriceUSD) + Float.mul(token1Amount, token1PriceUSD);
+      
+      if (tvlUSD <= 0) {
+        _errorLogBuffer.add("_updateAPR failed: TVL USD is zero or negative. tvlUSD: " # debug_show(tvlUSD) # ", nowTime: " # debug_show (_getTime()));
+        return;
+      };
+      
       var apr =  100 * (rewardTokenUSDValue / tvlUSD) * (_timeConst / Float.fromInt(IntUtils.toInt(initArgs.secondPerCycle, 512)));
       
       _APRRecordBuffer.add((_getTime(), apr));
